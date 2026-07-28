@@ -1,0 +1,16 @@
+spring:
+  data:
+    mongodb:
+      uri: mongodb://admin:admin123@localhost:27017/transaction_db_test?authSource=admin
+
+aws:
+  endpoint-url: http://localhost:4566
+
+app:
+  sqs:
+    queue-url: http://localhost:4566/000000000000/conta-bancaria-criada
+    poll-interval: 1000
+
+logging:
+  level:
+    com.itau.transaction: DEBUG

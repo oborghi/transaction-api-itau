@@ -1,0 +1,16 @@
+spring:
+  data:
+    mongodb:
+      uri: mongodb://admin:admin123@mongodb:27017/transaction_db?authSource=admin
+
+aws:
+  endpoint-url: http://localstack:4566
+
+app:
+  sqs:
+    queue-url: http://localstack:4566/000000000000/conta-bancaria-criada
+
+logging:
+  level:
+    com.itau.transaction: INFO
+    org.springframework.data.mongodb: INFO

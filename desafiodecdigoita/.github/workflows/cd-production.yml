@@ -1,0 +1,42 @@
+name: CD - Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Docker image tag to deploy'
+        required: true
+
+env:
+  AWS_REGION: sa-east-1
+  ECR_REPOSITORY: transaction-api
+  ECS_CLUSTER: transaction-api-cluster
+  ECS_SERVICE: transaction-api-service
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Deploy to ECS
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --force-new-deployment \
+            --task-definition $(aws ecs describe-task-definition \
+              --task-definition ${{ env.ECS_CLUSTER }}-task \
+              --query 'taskDefinition.taskDefinitionArn' \
+              --output text)

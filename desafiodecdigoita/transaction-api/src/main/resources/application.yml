@@ -1,0 +1,77 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: transaction-api
+  data:
+    mongodb:
+      uri: mongodb://admin:admin123@localhost:27017/transaction_db?authSource=admin
+  cache:
+    type: caffeine
+    caffeine:
+      spec: maximumSize=1000,expireAfterWrite=24h
+    cache-names:
+      - jwt-tokens
+
+# AWS
+aws:
+  endpoint-url: http://localhost:4566
+  region: sa-east-1
+  access-key-id: test
+  secret-access-key: test
+
+# App
+app:
+  security:
+    jwt:
+      secret: MyDefaultSecretKeyForDevelopmentOnly2024!
+      expiration: 86400
+      issuer: transaction-api
+    clients:
+      - id: transaction-api-client
+        secret: super-secret-key-123
+        roles: [ADMIN, API]
+      - id: transaction-api-readonly
+        secret: super-secret-key-123
+        roles: [API]
+  sqs:
+    queue-url: http://localhost:4566/000000000000/conta-bancaria-criada
+    poll-interval: 5000
+
+# Resilience4j
+resilience4j:
+  circuitbreaker:
+    instances:
+      mongoDbCircuitBreaker:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 3
+        registerHealthIndicator: true
+      sqsCircuitBreaker:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# Logging
+logging:
+  level:
+    com.itau.transaction: DEBUG
+    org.springframework.data.mongodb: DEBUG
