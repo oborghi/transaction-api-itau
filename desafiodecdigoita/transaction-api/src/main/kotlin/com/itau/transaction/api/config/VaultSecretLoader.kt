@@ -65,8 +65,8 @@ class VaultSecretLoader : EnvironmentPostProcessor {
 
         // Load API credentials
         loadSecret(vaultUrl, vaultToken, "transaction-api/credentials")?.let { credProps ->
-            credProps["client_id"]?.let { secrets["app.security.client.id"] = it }
-            credProps["client_secret"]?.let { secrets["app.security.client.secret"] = it }
+            credProps["client_id"]?.let { secrets["app.security.clients[0].id"] = it }
+            credProps["client_secret"]?.let { secrets["app.security.clients[0].secret"] = it }
             log.info("Loaded API credentials from Vault")
         }
 

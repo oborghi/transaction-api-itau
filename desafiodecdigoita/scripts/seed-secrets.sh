@@ -13,11 +13,16 @@ if ! curl -sf http://localhost:8200/v1/sys/health > /dev/null 2>&1; then
     exit 1
 fi
 
+# Helper: executa vault CLI dentro do container
+vault_exec() {
+    docker exec -e VAULT_ADDR='http://127.0.0.1:8200' -e VAULT_TOKEN='root-token' vault vault "$@"
+}
+
 # Enable KV secrets engine
-vault secrets enable -path=secret kv-v2 2>/dev/null || true
+vault_exec secrets enable -path=secret kv-v2 2>/dev/null || true
 
 # MongoDB secret
-vault kv put secret/transaction-api/mongodb \
+vault_exec kv put secret/transaction-api/mongodb \
   uri="mongodb://admin:admin123@mongodb:27017/transaction_db?authSource=admin" \
   username="admin" \
   password="admin123"
@@ -25,14 +30,14 @@ vault kv put secret/transaction-api/mongodb \
 echo "   ✅ MongoDB secret"
 
 # JWT secret
-vault kv put secret/transaction-api/jwt \
+vault_exec kv put secret/transaction-api/jwt \
   secret="MyDefaultSecretKeyForDevelopmentOnly2024!" \
   issuer="transaction-api"
 
 echo "   ✅ JWT secret"
 
 # SQS secret
-vault kv put secret/transaction-api/sqs \
+vault_exec kv put secret/transaction-api/sqs \
   access_key="test" \
   secret_key="test" \
   region="sa-east-1" \
@@ -41,7 +46,7 @@ vault kv put secret/transaction-api/sqs \
 echo "   ✅ SQS secret"
 
 # API credentials
-vault kv put secret/transaction-api/credentials \
+vault_exec kv put secret/transaction-api/credentials \
   client_id="transaction-api-client" \
   client_secret="super-secret-key-123"
 

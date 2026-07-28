@@ -2,7 +2,7 @@
   "info": {
     "name": "Transaction API",
     "_postman_id": "transaction-api-collection",
-    "description": "API de Autorização de Transações Financeiras - ITAÚ Challenge",
+    "description": "API de Autorização de Transações Financeiras - Desafio Técnico",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -72,7 +72,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"account_id\": \"5b19c8b6-0cc4-4c72-a989-0c2ee15fa975\",\n  \"type\": \"CREDIT\",\n  \"amount\": {\n    \"value\": 100.00,\n    \"currency\": \"BRL\"\n  }\n}"
+              "raw": "{\n  \"account_id\": \"{{ACCOUNT_ID}}\",\n  \"type\": \"CREDIT\",\n  \"amount\": {\n    \"value\": 100.00,\n    \"currency\": \"BRL\"\n  }\n}"
             },
             "url": {
               "raw": "{{BASE_URL}}/api/v1/transactions/{{TRANSACTION_ID}}",
@@ -97,7 +97,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"account_id\": \"5b19c8b6-0cc4-4c72-a989-0c2ee15fa975\",\n  \"type\": \"DEBIT\",\n  \"amount\": {\n    \"value\": 50.00,\n    \"currency\": \"BRL\"\n  }\n}"
+              "raw": "{\n  \"account_id\": \"{{ACCOUNT_ID}}\",\n  \"type\": \"DEBIT\",\n  \"amount\": {\n    \"value\": 50.00,\n    \"currency\": \"BRL\"\n  }\n}"
             },
             "url": {
               "raw": "{{BASE_URL}}/api/v1/transactions/{{TRANSACTION_ID}}",
@@ -122,7 +122,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"account_id\": \"5b19c8b6-0cc4-4c72-a989-0c2ee15fa975\",\n  \"type\": \"DEBIT\",\n  \"amount\": {\n    \"value\": 99999.00,\n    \"currency\": \"BRL\"\n  }\n}"
+              "raw": "{\n  \"account_id\": \"{{ACCOUNT_ID}}\",\n  \"type\": \"DEBIT\",\n  \"amount\": {\n    \"value\": 99999.00,\n    \"currency\": \"BRL\"\n  }\n}"
             },
             "url": {
               "raw": "{{BASE_URL}}/api/v1/transactions/{{TRANSACTION_ID}}",
@@ -168,7 +168,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"account_id\": \"5b19c8b6-0cc4-4c72-a989-0c2ee15fa975\",\n  \"type\": \"CREDIT\",\n  \"amount\": {\n    \"value\": 100.00,\n    \"currency\": \"BRL\"\n  }\n}"
+              "raw": "{\n  \"account_id\": \"{{ACCOUNT_ID}}\",\n  \"type\": \"CREDIT\",\n  \"amount\": {\n    \"value\": 100.00,\n    \"currency\": \"BRL\"\n  }\n}"
             },
             "url": {
               "raw": "{{BASE_URL}}/api/v1/transactions/{{TRANSACTION_ID}}",

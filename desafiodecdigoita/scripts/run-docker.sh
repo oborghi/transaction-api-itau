@@ -1,12 +1,12 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Iniciando ambiente local..."
-echo "   - LocalStack (SQS) via Docker"
-echo "   - MongoDB via Docker"
-echo "   - Vault (Secrets) via Docker"
-echo "   - Consul (Config) via Docker"
-echo "   - Transaction API via Maven (local)"
+echo "🐳 Iniciando ambiente Docker..."
+echo "   - LocalStack (SQS)"
+echo "   - MongoDB"
+echo "   - Vault (Secrets)"
+echo "   - Consul (Config)"
+echo "   - Transaction API"
 echo ""
 
 # Verifica se Docker está rodando
@@ -15,14 +15,8 @@ if ! docker info > /dev/null 2>&1; then
     exit 1
 fi
 
-# Verifica se Maven está instalado
-if ! command -v mvn &> /dev/null; then
-    echo "❌ Maven não encontrado. Instale o Maven."
-    exit 1
-fi
-
 # Criar pastas de dados (volumes do host)
-mkdir -p data/{mongodb,prometheus,loki,grafana,vault,consul}
+mkdir -p data/{mongodb,prometheus,loki,grafana,vault,consul} 2>/dev/null || sudo mkdir -p data/{mongodb,prometheus,loki,grafana,vault,consul} 2>/dev/null || true
 
 # Limpar dados anteriores e garantir permissões 777 recursivas
 echo "🧹 Limpando dados anteriores e garantindo permissões..."
@@ -32,8 +26,8 @@ chmod -R 777 data/ 2>/dev/null || sudo chmod -R 777 data/ 2>/dev/null || true
 # Para containers anteriores
 docker compose down -v 2>/dev/null || true
 
-# Sobe apenas infraestrutura (Vault, MongoDB, LocalStack, Consul)
-echo "📦 Subindo infraestrutura via Docker..."
+# Sobe apenas infraestrutura primeiro (Vault, MongoDB, LocalStack, Consul)
+echo "📦 Subindo infraestrutura..."
 docker compose up -d localstack mongodb vault consul
 
 echo ""
@@ -68,7 +62,7 @@ vault secrets enable -path=secret kv-v2 2>/dev/null || true
 
 # MongoDB secret
 vault kv put secret/transaction-api/mongodb \
-  uri="mongodb://admin:admin123@localhost:27017/transaction_db?authSource=admin" \
+  uri="mongodb://admin:admin123@mongodb:27017/transaction_db?authSource=admin" \
   username="admin" \
   password="admin123"
 echo "   ✅ MongoDB secret"
@@ -84,7 +78,7 @@ vault kv put secret/transaction-api/sqs \
   access_key="test" \
   secret_key="test" \
   region="sa-east-1" \
-  endpoint="http://localhost:4566"
+  endpoint="http://localstack:4566"
 echo "   ✅ AWS/SQS secret"
 
 # API credentials
@@ -104,10 +98,10 @@ echo ""
 echo "🗄️ Populando Consul com configs..."
 export CONSUL_HTTP_ADDR='http://localhost:8500'
 
-consul kv put transaction-api/config/mongodb-uri "mongodb://admin:admin123@localhost:27017/transaction_db?authSource=admin" 2>/dev/null || true
+consul kv put transaction-api/config/mongodb-uri "mongodb://admin:admin123@mongodb:27017/transaction_db?authSource=admin" 2>/dev/null || true
 consul kv put transaction-api/config/jwt-secret "MyDefaultSecretKeyForDevelopmentOnly2024!" 2>/dev/null || true
 consul kv put transaction-api/config/jwt-expiration "86400" 2>/dev/null || true
-consul kv put transaction-api/config/sqs-endpoint "http://localhost:4566" 2>/dev/null || true
+consul kv put transaction-api/config/sqs-endpoint "http://localstack:4566" 2>/dev/null || true
 consul kv put transaction-api/config/sqs-queue "conta-bancaria-criada" 2>/dev/null || true
 consul kv put transaction-api/config/dlq-queue "conta-bancaria-criada-dlq" 2>/dev/null || true
 consul kv put transaction-api/config/circuit-breaker-threshold "50" 2>/dev/null || true
@@ -118,17 +112,10 @@ consul kv put transaction-api/config/otel-enabled "true" 2>/dev/null || true
 echo "   ✅ Consul configs populados!"
 echo "   Consul UI: http://localhost:8500"
 
-# Sobe a aplicação via Maven
+# Sobe a aplicação
 echo ""
-echo "🚀 Subindo Transaction API via Maven..."
-echo "   Profile: local"
-echo "   Porta: 8080"
-echo ""
-
-# Executa a aplicação com o profile local
-cd desafiodecdigoita
-mvn spring-boot:run -pl transaction-api -Dspring-boot.run.profiles=local &
-APP_PID=$!
+echo "🚀 Subindo Transaction API..."
+docker compose up -d --build transaction-api
 
 echo ""
 echo "⏳ Aguardando API ficar saudável..."
@@ -156,10 +143,6 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
         echo ""
         echo "📋 Vault UI: http://localhost:8200 (token: root-token)"
         echo "📋 Consul UI: http://localhost:8500"
-        echo ""
-        echo "📋 Para parar a aplicação:"
-        echo "   kill $APP_PID"
-        echo "   docker compose down"
         exit 0
     fi
     RETRY_COUNT=$((RETRY_COUNT + 1))
@@ -168,6 +151,5 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
 done
 
 echo "❌ API não ficou saudável após $MAX_RETRIES tentativas."
-echo "   Verifique os logs do Maven."
-kill $APP_PID 2>/dev/null || true
+echo "   Verifique os logs: docker compose logs transaction-api"
 exit 1

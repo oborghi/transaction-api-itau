@@ -16,6 +16,10 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 RUN apk add --no-cache curl bash
 WORKDIR /app
 
+# Default environment for Docker Compose (overridden at runtime if needed)
+ENV CONSUL_HOST=consul
+ENV CONSUL_PORT=8500
+
 # Copy application classes (non-repackaged jar)
 COPY --from=builder /app/transaction-api/target/transaction-api-1.0.0-SNAPSHOT.jar app.jar
 
