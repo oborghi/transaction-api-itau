@@ -1,4 +1,4 @@
-#!/bin/bash
+i#!/bin/bash
 set -e
 
 echo "🚀 Iniciando ambiente local..."
@@ -118,16 +118,38 @@ consul kv put transaction-api/config/otel-enabled "true" 2>/dev/null || true
 echo "   ✅ Consul configs populados!"
 echo "   Consul UI: http://localhost:8500"
 
-# Sobe a aplicação via Maven
+# Sobe a aplicação via Java (mesmo método do Docker)
 echo ""
-echo "🚀 Subindo Transaction API via Maven..."
+echo "🚀 Subindo Transaction API..."
 echo "   Profile: local"
 echo "   Porta: 8080"
 echo ""
 
-# Executa a aplicação com o profile local
+# Primeiro, constrói a aplicação
+echo "📦 Construindo a aplicação..."
 cd desafiodecdigoita
-mvn spring-boot:run -pl transaction-api -Dspring-boot.run.profiles=local &
+mvn clean package -DskipTests -B -q
+
+# Verifica se os arquivos necessários existem
+JAR_FILE="transaction-api/target/transaction-api-1.0.0-SNAPSHOT.jar"
+LIBS_DIR="transaction-api/target/libs"
+
+if [ ! -f "$JAR_FILE" ]; then
+    echo "❌ JAR não encontrado: $JAR_FILE"
+    exit 1
+fi
+
+if [ ! -d "$LIBS_DIR" ]; then
+    echo "❌ Diretório libs não encontrado: $LIBS_DIR"
+    exit 1
+fi
+
+# Executa a aplicação com o classpath correto (mesmo método do Docker)
+echo "🚀 Iniciando aplicação com java -cp..."
+java -cp "$JAR_FILE:$LIBS_DIR/*" \
+    -Dspring.profiles.active=local \
+    -Dserver.port=8080 \
+    com.itau.transaction.api.TransactionApplicationKt &
 APP_PID=$!
 
 echo ""
