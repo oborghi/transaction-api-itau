@@ -39,13 +39,16 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
         echo '   curl -X POST http://127.0.0.1:8080/api/v1/auth/token \'
         echo '     -H "Content-Type: application/json" \'
         echo '     -d '"'"'{"client_id":"transaction-api-client","client_secret":"super-secret-key-123"}'"'"''
-        echo ""
-        echo "📋 Para verificar a fila SQS:"
-        echo "   ./scripts/check-queue.sh"
-        echo ""
-        echo "📋 Para popular contas de teste:"
-        echo "   ./scripts/seed-accounts.sh"
-        exit 0
+echo ""
+echo "📋 Para verificar a fila SQS:"
+echo "   ./scripts/check-queue.sh"
+echo ""
+echo "📋 Para popular contas de teste:"
+echo "   ./scripts/seed-accounts.sh"
+echo ""
+echo "📋 Para popular configs no Consul:"
+echo "   ./scripts/seed-consul.sh"
+exit 0
     fi
     RETRY_COUNT=$((RETRY_COUNT + 1))
     echo "   Tentativa $RETRY_COUNT/$MAX_RETRIES..."

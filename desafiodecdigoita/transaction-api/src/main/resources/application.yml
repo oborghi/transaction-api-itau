@@ -70,6 +70,15 @@ management:
       prometheus:
         enabled: true
 
+# Consul (disabled by default, enabled in docker profile)
+spring:
+  cloud:
+    consul:
+      config:
+        enabled: false
+      discovery:
+        enabled: false
+
 # Logging
 logging:
   level:

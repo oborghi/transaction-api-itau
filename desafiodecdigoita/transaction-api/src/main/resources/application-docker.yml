@@ -2,6 +2,24 @@ spring:
   data:
     mongodb:
       uri: mongodb://admin:admin123@mongodb:27017/transaction_db?authSource=admin
+  cloud:
+    consul:
+      host: ${CONSUL_HOST:localhost}
+      port: ${CONSUL_PORT:8500}
+      config:
+        enabled: true
+        prefix: transaction-api
+        default-context: config
+        format: KEY_VALUE
+        watch:
+          enabled: true
+          delay: 1000
+      discovery:
+        enabled: true
+        instance-id: ${spring.application.name}:${random.value}
+        health-check-interval: 15s
+        health-check-path: /actuator/health
+        prefer-ip-address: true
 
 aws:
   endpoint-url: http://localstack:4566
@@ -14,3 +32,4 @@ logging:
   level:
     com.itau.transaction: INFO
     org.springframework.data.mongodb: INFO
+    org.springframework.cloud.consul: WARN
