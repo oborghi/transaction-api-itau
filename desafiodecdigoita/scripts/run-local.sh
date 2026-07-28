@@ -1,4 +1,4 @@
-i#!/bin/bash
+#!/bin/bash
 set -e
 
 echo "🚀 Iniciando ambiente local..."
@@ -6,12 +6,18 @@ echo "   - LocalStack (SQS) via Docker"
 echo "   - MongoDB via Docker"
 echo "   - Vault (Secrets) via Docker"
 echo "   - Consul (Config) via Docker"
-echo "   - Transaction API via Maven (local)"
+echo "   - Transaction API via Java (local)"
 echo ""
 
 # Verifica se Docker está rodando
 if ! docker info > /dev/null 2>&1; then
     echo "❌ Docker não está rodando. Inicie o Docker e tente novamente."
+    exit 1
+fi
+
+# Verifica se Java está instalado
+if ! command -v java &> /dev/null; then
+    echo "❌ Java não encontrado. Instale o JDK 21."
     exit 1
 fi
 
@@ -24,12 +30,12 @@ fi
 # Criar pastas de dados (volumes do host)
 mkdir -p data/{mongodb,prometheus,loki,grafana,vault,consul}
 
-# Limpar dados anteriores e garantir permissões 777 recursivas
-echo "🧹 Limpando dados anteriores e garantindo permissões..."
+# Limpar dados anteriores
+echo "🧹 Limpando dados anteriores..."
 rm -rf data/consul/* data/mongodb/* data/prometheus/* data/loki/* data/grafana/* data/vault/* 2>/dev/null || true
-chmod -R 777 data/ 2>/dev/null || sudo chmod -R 777 data/ 2>/dev/null || true
 
-# Para containers anteriores
+# Para containers anteriores e limpa volumes
+echo "🛑 Parando containers anteriores e limpando volumes..."
 docker compose down -v 2>/dev/null || true
 
 # Sobe apenas infraestrutura (Vault, MongoDB, LocalStack, Consul)
@@ -57,38 +63,58 @@ if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
     exit 1
 fi
 
-# Popula Vault com secrets
+# Inicializa filas SQS no LocalStack
+echo ""
+echo "📨 Inicializando filas SQS no LocalStack..."
+
+export AWS_DEFAULT_REGION=sa-east-1
+export AWS_ACCESS_KEY_ID=test
+export AWS_SECRET_ACCESS_KEY=test
+
+# Aguarda LocalStack estar pronto
+sleep 3
+
+# Cria filas SQS
+aws --endpoint-url=http://localhost:4566 --region sa-east-1 sqs create-queue --queue-name conta-bancaria-criada 2>/dev/null || true
+aws --endpoint-url=http://localhost:4566 --region sa-east-1 sqs create-queue --queue-name conta-bancaria-criada-dlq 2>/dev/null || true
+echo "   ✅ Filas SQS criadas"
+
+# Popula Vault com secrets usando docker exec
 echo ""
 echo "🔐 Populando Vault com secrets..."
-export VAULT_ADDR='http://localhost:8200'
-export VAULT_TOKEN='root-token'
+
+# Aguarda Vault estar pronto para writes
+sleep 2
+
+# Variáveis para comandos vault via docker exec
+VAULT_ENV="-e VAULT_ADDR=http://localhost:8200 -e VAULT_TOKEN=root-token"
 
 # Enable KV secrets engine
-vault secrets enable -path=secret kv-v2 2>/dev/null || true
+docker exec $VAULT_ENV vault vault secrets enable -path=secret kv-v2 2>/dev/null || true
 
 # MongoDB secret
-vault kv put secret/transaction-api/mongodb \
-  uri="mongodb://admin:admin123@localhost:27017/transaction_db?authSource=admin" \
+docker exec $VAULT_ENV vault vault kv put secret/transaction-api/mongodb \
+  uri="mongodb://admin:admin123@mongodb:27017/transaction_db?authSource=admin" \
   username="admin" \
   password="admin123"
 echo "   ✅ MongoDB secret"
 
 # JWT secret
-vault kv put secret/transaction-api/jwt \
+docker exec $VAULT_ENV vault vault kv put secret/transaction-api/jwt \
   secret="MyDefaultSecretKeyForDevelopmentOnly2024!" \
   issuer="transaction-api"
 echo "   ✅ JWT secret"
 
 # AWS/SQS secret
-vault kv put secret/transaction-api/sqs \
+docker exec $VAULT_ENV vault vault kv put secret/transaction-api/sqs \
   access_key="test" \
   secret_key="test" \
   region="sa-east-1" \
-  endpoint="http://localhost:4566"
+  endpoint="http://localstack:4566"
 echo "   ✅ AWS/SQS secret"
 
 # API credentials
-vault kv put secret/transaction-api/credentials \
+docker exec $VAULT_ENV vault vault kv put secret/transaction-api/credentials \
   client_id="transaction-api-client" \
   client_secret="super-secret-key-123" \
   readonly_id="transaction-api-readonly" \
@@ -99,21 +125,20 @@ echo ""
 echo "✅ Todos os secrets populados no Vault!"
 echo "   Vault UI: http://localhost:8200 (token: root-token)"
 
-# Popula Consul com configs (opcional)
+# Popula Consul com configs usando docker exec
 echo ""
 echo "🗄️ Populando Consul com configs..."
-export CONSUL_HTTP_ADDR='http://localhost:8500'
 
-consul kv put transaction-api/config/mongodb-uri "mongodb://admin:admin123@localhost:27017/transaction_db?authSource=admin" 2>/dev/null || true
-consul kv put transaction-api/config/jwt-secret "MyDefaultSecretKeyForDevelopmentOnly2024!" 2>/dev/null || true
-consul kv put transaction-api/config/jwt-expiration "86400" 2>/dev/null || true
-consul kv put transaction-api/config/sqs-endpoint "http://localhost:4566" 2>/dev/null || true
-consul kv put transaction-api/config/sqs-queue "conta-bancaria-criada" 2>/dev/null || true
-consul kv put transaction-api/config/dlq-queue "conta-bancaria-criada-dlq" 2>/dev/null || true
-consul kv put transaction-api/config/circuit-breaker-threshold "50" 2>/dev/null || true
-consul kv put transaction-api/config/dlq-reprocessor-interval "PT5M" 2>/dev/null || true
-consul kv put transaction-api/config/prometheus-enabled "true" 2>/dev/null || true
-consul kv put transaction-api/config/otel-enabled "true" 2>/dev/null || true
+docker exec consul consul kv put transaction-api/config/mongodb-uri "mongodb://admin:admin123@mongodb:27017/transaction_db?authSource=admin"
+docker exec consul consul kv put transaction-api/config/jwt-secret "MyDefaultSecretKeyForDevelopmentOnly2024!"
+docker exec consul consul kv put transaction-api/config/jwt-expiration "86400"
+docker exec consul consul kv put transaction-api/config/sqs-endpoint "http://localstack:4566"
+docker exec consul consul kv put transaction-api/config/sqs-queue "conta-bancaria-criada"
+docker exec consul consul kv put transaction-api/config/dlq-queue "conta-bancaria-criada-dlq"
+docker exec consul consul kv put transaction-api/config/circuit-breaker-threshold "50"
+docker exec consul consul kv put transaction-api/config/dlq-reprocessor-interval "PT5M"
+docker exec consul consul kv put transaction-api/config/prometheus-enabled "true"
+docker exec consul consul kv put transaction-api/config/otel-enabled "true"
 
 echo "   ✅ Consul configs populados!"
 echo "   Consul UI: http://localhost:8500"
@@ -125,9 +150,13 @@ echo "   Profile: local"
 echo "   Porta: 8080"
 echo ""
 
+# Descobre o diretório raiz do projeto (pai do diretório scripts)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$PROJECT_DIR"
+
 # Primeiro, constrói a aplicação
 echo "📦 Construindo a aplicação..."
-cd desafiodecdigoita
 mvn clean package -DskipTests -B -q
 
 # Verifica se os arquivos necessários existem
@@ -181,7 +210,7 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
         echo ""
         echo "📋 Para parar a aplicação:"
         echo "   kill $APP_PID"
-        echo "   docker compose down"
+        echo "   docker compose down -v"
         exit 0
     fi
     RETRY_COUNT=$((RETRY_COUNT + 1))
@@ -190,6 +219,6 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
 done
 
 echo "❌ API não ficou saudável após $MAX_RETRIES tentativas."
-echo "   Verifique os logs do Maven."
+echo "   Verifique os logs."
 kill $APP_PID 2>/dev/null || true
 exit 1

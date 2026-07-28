@@ -12,7 +12,7 @@
 spring:
   data:
     mongodb:
-      uri: mongodb://localhost:27017/transaction_db
+      uri: mongodb://admin:admin123@localhost:27017/transaction_db?authSource=admin
 
 # AWS (LocalStack)
 aws:

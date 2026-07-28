@@ -16,14 +16,14 @@ if ! docker info > /dev/null 2>&1; then
 fi
 
 # Criar pastas de dados (volumes do host)
-mkdir -p data/{mongodb,prometheus,loki,grafana,vault,consul} 2>/dev/null || sudo mkdir -p data/{mongodb,prometheus,loki,grafana,vault,consul} 2>/dev/null || true
+mkdir -p data/{mongodb,prometheus,loki,grafana,vault,consul}
 
-# Limpar dados anteriores e garantir permissões 777 recursivas
-echo "🧹 Limpando dados anteriores e garantindo permissões..."
+# Limpar dados anteriores
+echo "🧹 Limpando dados anteriores..."
 rm -rf data/consul/* data/mongodb/* data/prometheus/* data/loki/* data/grafana/* data/vault/* 2>/dev/null || true
-chmod -R 777 data/ 2>/dev/null || sudo chmod -R 777 data/ 2>/dev/null || true
 
-# Para containers anteriores
+# Para containers anteriores e limpa volumes
+echo "🛑 Parando containers anteriores e limpando volumes..."
 docker compose down -v 2>/dev/null || true
 
 # Sobe apenas infraestrutura primeiro (Vault, MongoDB, LocalStack, Consul)
@@ -51,30 +51,40 @@ if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
     exit 1
 fi
 
-# Popula Vault com secrets
+# Inicializa filas SQS no LocalStack
+echo ""
+echo "📨 Inicializando filas SQS no LocalStack..."
+
+# Cria filas SQS
+docker exec localstack aws --endpoint-url=http://localhost:4566 --region sa-east-1 sqs create-queue --queue-name conta-bancaria-criada 2>/dev/null || true
+docker exec localstack aws --endpoint-url=http://localhost:4566 --region sa-east-1 sqs create-queue --queue-name conta-bancaria-criada-dlq 2>/dev/null || true
+echo "   ✅ Filas SQS criadas"
+
+# Popula Vault com secrets usando docker exec
 echo ""
 echo "🔐 Populando Vault com secrets..."
-export VAULT_ADDR='http://localhost:8200'
-export VAULT_TOKEN='root-token'
+
+# Aguarda Vault estar pronto para writes
+sleep 2
 
 # Enable KV secrets engine
-vault secrets enable -path=secret kv-v2 2>/dev/null || true
+docker exec vault vault secrets enable -path=secret kv-v2 2>/dev/null || true
 
 # MongoDB secret
-vault kv put secret/transaction-api/mongodb \
+docker exec vault vault kv put secret/transaction-api/mongodb \
   uri="mongodb://admin:admin123@mongodb:27017/transaction_db?authSource=admin" \
   username="admin" \
   password="admin123"
 echo "   ✅ MongoDB secret"
 
 # JWT secret
-vault kv put secret/transaction-api/jwt \
+docker exec vault vault kv put secret/transaction-api/jwt \
   secret="MyDefaultSecretKeyForDevelopmentOnly2024!" \
   issuer="transaction-api"
 echo "   ✅ JWT secret"
 
 # AWS/SQS secret
-vault kv put secret/transaction-api/sqs \
+docker exec vault vault kv put secret/transaction-api/sqs \
   access_key="test" \
   secret_key="test" \
   region="sa-east-1" \
@@ -82,7 +92,7 @@ vault kv put secret/transaction-api/sqs \
 echo "   ✅ AWS/SQS secret"
 
 # API credentials
-vault kv put secret/transaction-api/credentials \
+docker exec vault vault kv put secret/transaction-api/credentials \
   client_id="transaction-api-client" \
   client_secret="super-secret-key-123" \
   readonly_id="transaction-api-readonly" \
@@ -93,21 +103,20 @@ echo ""
 echo "✅ Todos os secrets populados no Vault!"
 echo "   Vault UI: http://localhost:8200 (token: root-token)"
 
-# Popula Consul com configs (opcional)
+# Popula Consul com configs usando docker exec
 echo ""
 echo "🗄️ Populando Consul com configs..."
-export CONSUL_HTTP_ADDR='http://localhost:8500'
 
-consul kv put transaction-api/config/mongodb-uri "mongodb://admin:admin123@mongodb:27017/transaction_db?authSource=admin" 2>/dev/null || true
-consul kv put transaction-api/config/jwt-secret "MyDefaultSecretKeyForDevelopmentOnly2024!" 2>/dev/null || true
-consul kv put transaction-api/config/jwt-expiration "86400" 2>/dev/null || true
-consul kv put transaction-api/config/sqs-endpoint "http://localstack:4566" 2>/dev/null || true
-consul kv put transaction-api/config/sqs-queue "conta-bancaria-criada" 2>/dev/null || true
-consul kv put transaction-api/config/dlq-queue "conta-bancaria-criada-dlq" 2>/dev/null || true
-consul kv put transaction-api/config/circuit-breaker-threshold "50" 2>/dev/null || true
-consul kv put transaction-api/config/dlq-reprocessor-interval "PT5M" 2>/dev/null || true
-consul kv put transaction-api/config/prometheus-enabled "true" 2>/dev/null || true
-consul kv put transaction-api/config/otel-enabled "true" 2>/dev/null || true
+docker exec consul consul kv put transaction-api/config/mongodb-uri "mongodb://admin:admin123@mongodb:27017/transaction_db?authSource=admin"
+docker exec consul consul kv put transaction-api/config/jwt-secret "MyDefaultSecretKeyForDevelopmentOnly2024!"
+docker exec consul consul kv put transaction-api/config/jwt-expiration "86400"
+docker exec consul consul kv put transaction-api/config/sqs-endpoint "http://localstack:4566"
+docker exec consul consul kv put transaction-api/config/sqs-queue "conta-bancaria-criada"
+docker exec consul consul kv put transaction-api/config/dlq-queue "conta-bancaria-criada-dlq"
+docker exec consul consul kv put transaction-api/config/circuit-breaker-threshold "50"
+docker exec consul consul kv put transaction-api/config/dlq-reprocessor-interval "PT5M"
+docker exec consul consul kv put transaction-api/config/prometheus-enabled "true"
+docker exec consul consul kv put transaction-api/config/otel-enabled "true"
 
 echo "   ✅ Consul configs populados!"
 echo "   Consul UI: http://localhost:8500"
