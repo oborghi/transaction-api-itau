@@ -54,6 +54,13 @@
             <version>4.1.2</version>
         </dependency>
 
+        <!-- Spring Cloud Vault -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-vault-config</artifactId>
+            <version>4.1.2</version>
+        </dependency>
+
         <!-- OpenAPI / Swagger -->
         <dependency>
             <groupId>org.springdoc</groupId>
@@ -86,6 +93,45 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- Disable repackaging so we can use libs/ classpath approach -->
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+            <!-- Copy all runtime dependencies (including internal modules) to libs/ -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.6.1</version>
+                <executions>
+                    <execution>
+                        <id>copy-dependencies</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/libs</outputDirectory>
+                            <includeScope>runtime</includeScope>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Configure JAR manifest for classpath-based execution -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>com.itau.transaction.api.TransactionApplicationKt</mainClass>
+                            <classpathPrefix>libs/</classpathPrefix>
+                        </manifest>
+                        <manifestEntries>
+                            <Class-Path>libs/*</Class-Path>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
             </plugin>
         </plugins>
     </build>

@@ -76,6 +76,12 @@ variable "jwt_secret" {
   sensitive   = true
 }
 
+variable "api_client_secret" {
+  description = "API client secret for authentication"
+  type        = string
+  sensitive   = true
+}
+
 variable "allowed_cidr_blocks" {
   description = "CIDR blocks allowed to access the ALB"
   type        = list(string)

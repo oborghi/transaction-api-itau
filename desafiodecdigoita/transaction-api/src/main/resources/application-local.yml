@@ -1,0 +1,95 @@
+# ==========================================
+# Local Profile - Local Development
+# ==========================================
+# Activated via: SPRING_PROFILES_ACTIVE=local
+# Uses local Docker infrastructure:
+#   - MongoDB → Local MongoDB container
+#   - SQS → LocalStack (AWS-compatible)
+#   - Secrets → HashiCorp Vault (dev mode)
+#   - Config → HashiCorp Consul (dev mode)
+# ==========================================
+
+spring:
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/transaction_db
+
+# AWS (LocalStack)
+aws:
+  endpoint-url: http://localhost:4566
+  region: sa-east-1
+  access-key-id: test
+  secret-access-key: test
+
+# SQS (LocalStack)
+app:
+  sqs:
+    queue-url: http://localhost:4566/000000000000/conta-bancaria-criada
+    dlq-url: http://localhost:4566/000000000000/conta-bancaria-criada-dlq
+    poll-interval: 5000
+  security:
+    jwt:
+      secret: ${JWT_SECRET:MyDefaultSecretKeyForDevelopmentOnly2024!}
+      expiration: 86400
+      issuer: transaction-api
+    clients:
+      - id: transaction-api-client
+        secret: super-secret-key-123
+        roles: [ADMIN, API]
+      - id: transaction-api-readonly
+        secret: super-secret-key-123
+        roles: [API]
+
+# Vault (disabled in local profile - secrets inline above)
+spring.cloud.vault:
+  enabled: false
+
+# Consul (disabled in local profile)
+spring.cloud:
+  consul:
+    config:
+      enabled: false
+    discovery:
+      enabled: false
+
+# AWS Secrets Manager (disabled in local profile)
+app.secrets:
+  aws:
+    enabled: false
+
+# Resilience4j
+resilience4j:
+  circuitbreaker:
+    instances:
+      mongoDbCircuitBreaker:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 3
+        registerHealthIndicator: true
+      sqsCircuitBreaker:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# Logging
+logging:
+  level:
+    com.itau.transaction: DEBUG
+    org.springframework.data.mongodb: DEBUG

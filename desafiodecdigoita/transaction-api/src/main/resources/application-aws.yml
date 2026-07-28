@@ -1,0 +1,124 @@
+# ==========================================
+# AWS Profile - Production / Staging
+# ==========================================
+# Activated via: SPRING_PROFILES_ACTIVE=aws
+# Replaces all local Docker infrastructure with AWS-native services:
+#   - MongoDB → Amazon DocumentDB
+#   - SQS → Amazon SQS (native)
+#   - Secrets → AWS Secrets Manager (instead of Vault)
+#   - Config → AWS Systems Manager Parameter Store (instead of Consul)
+#   - Auth → IAM Roles (instead of access keys)
+# ==========================================
+
+spring:
+  data:
+    mongodb:
+      # DocumentDB URI loaded from AWS Secrets Manager at startup
+      # Fallback: environment variable SPRING_DATA_MONGODB_URI
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://transaction-api:changeme@documentdb-cluster.xyz.sa-east-1.docdb.amazonaws.com:27017/transaction_db?tls=true&replicaSet=rs0&readPreference=secondaryPreferred&ssl=true&ssl_validate=false}
+
+# AWS (IAM Role-based - no access keys needed in ECS)
+aws:
+  # No endpoint-url needed - uses real AWS endpoints
+  region: ${AWS_DEFAULT_REGION:sa-east-1}
+  # Credentials loaded from IAM Role attached to ECS Task
+  # Do NOT set access-key-id or secret-access-key in production
+
+# SQS - Native AWS SQS (no LocalStack)
+app:
+  sqs:
+    queue-url: ${SQS_QUEUE_URL:https://sqs.sa-east-1.amazonaws.com/000000000000/conta-bancaria-criada}
+    dlq-url: ${SQS_DLQ_URL:https://sqs.sa-east-1.amazonaws.com/000000000000/conta-bancaria-criada-dlq}
+    poll-interval: 5000
+  security:
+    jwt:
+      # JWT secret loaded from AWS Secrets Manager at startup
+      # Fallback: environment variable JWT_SECRET
+      secret: ${JWT_SECRET:changeme}
+      expiration: ${JWT_EXPIRATION:86400}
+      issuer: transaction-api
+    clients:
+      # Client credentials loaded from AWS Secrets Manager at startup
+      - id: ${API_CLIENT_ID:transaction-api-client}
+        secret: ${API_CLIENT_SECRET:changeme}
+        roles: [ADMIN, API]
+      - id: ${API_READONLY_ID:transaction-api-readonly}
+        secret: ${API_READONLY_SECRET:changeme}
+        roles: [API]
+
+# AWS Secrets Manager (enabled)
+app.secrets:
+  aws:
+    enabled: true
+
+# Consul - DISABLED in AWS (use environment variables / SSM)
+spring.cloud:
+  consul:
+    config:
+      enabled: false
+    discovery:
+      enabled: false
+
+# Vault - DISABLED in AWS (use Secrets Manager)
+spring.cloud.vault:
+  enabled: false
+
+# Resilience4j
+resilience4j:
+  circuitbreaker:
+    instances:
+      mongoDbCircuitBreaker:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 3
+        registerHealthIndicator: true
+      sqsCircuitBreaker:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+  retry:
+    instances:
+      mongoDbRetry:
+        maxAttempts: 3
+        waitDuration: 500ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - org.springframework.dao.DataAccessResourceFailureException
+          - com.mongodb.MongoException
+      sqsRetry:
+        maxAttempts: 3
+        waitDuration: 1000ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 3
+        retryExceptions:
+          - software.amazon.awssdk.core.exception.SdkException
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  tracing:
+    sampling:
+      probability: 0.1  # 10% in production
+
+# Logging
+logging:
+  level:
+    com.itau.transaction: INFO
+    org.springframework.data.mongodb: WARN
+    # Reduce noise in production
+    org.springframework.cloud.consul: WARN
+    io.github.resilience4j: WARN

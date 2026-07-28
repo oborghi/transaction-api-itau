@@ -1,12 +1,23 @@
+# ==========================================
+# Base Configuration (shared across all profiles)
+# ==========================================
+# Profile-specific configs:
+#   application-local.yml  → Local development (Docker: MongoDB, LocalStack, Vault)
+#   application-docker.yml → Docker Compose environment
+#   application-aws.yml    → AWS production (DocumentDB, SQS, Secrets Manager)
+#   application-test.yml   → Integration tests
+#
+# Activate via: SPRING_PROFILES_ACTIVE=local|docker|aws|test
+# ==========================================
+
 server:
   port: 8080
 
 spring:
   application:
     name: transaction-api
-  data:
-    mongodb:
-      uri: mongodb://admin:admin123@localhost:27017/transaction_db?authSource=admin
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
   cache:
     type: caffeine
     caffeine:
@@ -14,32 +25,45 @@ spring:
     cache-names:
       - jwt-tokens
 
-# AWS
+# ==========================================
+# AWS (defaults - overridden per profile)
+# ==========================================
 aws:
-  endpoint-url: http://localhost:4566
-  region: sa-east-1
-  access-key-id: test
-  secret-access-key: test
+  endpoint-url: ${AWS_ENDPOINT_URL:}
+  region: ${AWS_DEFAULT_REGION:sa-east-1}
 
-# App
+# ==========================================
+# App Configuration (defaults - overridden per profile)
+# ==========================================
 app:
   security:
     jwt:
-      secret: MyDefaultSecretKeyForDevelopmentOnly2024!
-      expiration: 86400
+      secret: ${JWT_SECRET:changeme}
+      expiration: ${JWT_EXPIRATION:86400}
       issuer: transaction-api
     clients:
-      - id: transaction-api-client
-        secret: super-secret-key-123
+      - id: ${API_CLIENT_ID:transaction-api-client}
+        secret: ${API_CLIENT_SECRET:changeme}
         roles: [ADMIN, API]
-      - id: transaction-api-readonly
-        secret: super-secret-key-123
+      - id: ${API_READONLY_ID:transaction-api-readonly}
+        secret: ${API_READONLY_SECRET:changeme}
         roles: [API]
   sqs:
-    queue-url: http://localhost:4566/000000000000/conta-bancaria-criada
-    poll-interval: 5000
+    queue-url: ${SQS_QUEUE_URL:}
+    dlq-url: ${SQS_DLQ_URL:}
+    poll-interval: ${SQS_POLL_INTERVAL:5000}
+  secrets:
+    aws:
+      enabled: ${AWS_SECRETS_ENABLED:false}
+  dlq:
+    reprocessor:
+      enabled: true
+      interval: PT5M
+      max-batch-size: 10
 
-# Resilience4j
+# ==========================================
+# Resilience4j (shared across all profiles)
+# ==========================================
 resilience4j:
   circuitbreaker:
     instances:
@@ -55,8 +79,27 @@ resilience4j:
         minimumNumberOfCalls: 5
         failureRateThreshold: 50
         waitDurationInOpenState: 30s
+      dlqReprocessorCircuitBreaker:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 3
+        failureRateThreshold: 50
+        waitDurationInOpenState: 60s
+        permittedNumberOfCallsInHalfOpenState: 2
+        registerHealthIndicator: true
+  retry:
+    instances:
+      mongoDbRetry:
+        maxAttempts: 3
+        waitDuration: 500ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - org.springframework.dao.DataAccessResourceFailureException
+          - com.mongodb.MongoException
 
-# Actuator
+# ==========================================
+# Actuator (shared across all profiles)
+# ==========================================
 management:
   endpoints:
     web:
@@ -70,17 +113,36 @@ management:
       prometheus:
         enabled: true
 
+# ==========================================
 # Consul (disabled by default, enabled in docker profile)
-spring:
-  cloud:
-    consul:
-      config:
-        enabled: false
-      discovery:
-        enabled: false
+# ==========================================
+spring.cloud:
+  consul:
+    config:
+      enabled: false
+    discovery:
+      enabled: false
 
-# Logging
+# ==========================================
+# Vault (disabled by default, enabled in docker profile)
+# ==========================================
+spring.cloud.vault:
+  enabled: false
+  host: localhost
+  port: 8200
+  scheme: http
+  authentication: TOKEN
+  token: root-token
+  kv:
+    enabled: true
+    backend: secret
+    default-context: transaction-api
+    application-name: transaction-api
+
+# ==========================================
+# Logging (defaults - overridden per profile)
+# ==========================================
 logging:
   level:
-    com.itau.transaction: DEBUG
-    org.springframework.data.mongodb: DEBUG
+    com.itau.transaction: INFO
+    org.springframework.data.mongodb: WARN
