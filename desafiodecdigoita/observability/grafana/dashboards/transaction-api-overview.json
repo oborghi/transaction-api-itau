@@ -1,0 +1,205 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "Transaction Success Rate (%)",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 90 },
+              { "color": "green", "value": 99 }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(transaction_total{status=\"SUCCEEDED\"}[5m])) / sum(rate(transaction_total[5m])) * 100",
+          "legendFormat": "Success Rate"
+        }
+      ]
+    },
+    {
+      "title": "Total Transactions",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(transaction_total[5m]))",
+          "legendFormat": "Transactions (5m)"
+        }
+      ]
+    },
+    {
+      "title": "Accounts Registered",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "purple", "value": null }] } }
+      },
+      "targets": [
+        {
+          "expr": "account",
+          "legendFormat": "Accounts"
+        }
+      ]
+    },
+    {
+      "title": "Circuit Breaker State",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "options": { "0": { "text": "CLOSED", "color": "green" }, "1": { "text": "OPEN", "color": "red" }, "2": { "text": "HALF-OPEN", "color": "yellow" } }, "type": "value" }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "expr": "resilience4j_circuitbreaker_state",
+          "legendFormat": "{{name}}"
+        }
+      ]
+    },
+    {
+      "title": "Authorization Latency P50/P90/P95",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, rate(transaction_authorization_latency_seconds_bucket[5m]))",
+          "legendFormat": "P50"
+        },
+        {
+          "expr": "histogram_quantile(0.9, rate(transaction_authorization_latency_seconds_bucket[5m]))",
+          "legendFormat": "P90"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(transaction_authorization_latency_seconds_bucket[5m]))",
+          "legendFormat": "P95"
+        }
+      ]
+    },
+    {
+      "title": "Transactions per Second by Type",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "fieldConfig": {
+        "defaults": { "unit": "ops" }
+      },
+      "targets": [
+        {
+          "expr": "rate(transaction_total{type=\"CREDIT\"}[5m])",
+          "legendFormat": "CREDIT"
+        },
+        {
+          "expr": "rate(transaction_total{type=\"DEBIT\"}[5m])",
+          "legendFormat": "DEBIT"
+        }
+      ]
+    },
+    {
+      "title": "Transactions by Status",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "targets": [
+        {
+          "expr": "rate(transaction_total{status=\"SUCCEEDED\"}[5m])",
+          "legendFormat": "SUCCEEDED"
+        },
+        {
+          "expr": "rate(transaction_total{status=\"FAILED\"}[5m])",
+          "legendFormat": "FAILED"
+        }
+      ]
+    },
+    {
+      "title": "Average Account Balance",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "fieldConfig": {
+        "defaults": { "unit": "currencyBRL" }
+      },
+      "targets": [
+        {
+          "expr": "account_balance_avg",
+          "legendFormat": "Avg Balance"
+        }
+      ]
+    },
+    {
+      "title": "Circuit Breaker Failure Rate",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 22 },
+      "fieldConfig": {
+        "defaults": { "unit": "percent" }
+      },
+      "targets": [
+        {
+          "expr": "resilience4j_circuitbreaker_failure_rate",
+          "legendFormat": "{{name}}"
+        }
+      ]
+    },
+    {
+      "title": "SQS Messages Consumed",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 22 },
+      "targets": [
+        {
+          "expr": "rate(sqs_messages_consumed_total[5m])",
+          "legendFormat": "Consumed/sec"
+        },
+        {
+          "expr": "rate(sqs_messages_failed_total[5m])",
+          "legendFormat": "Failed/sec"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["transaction-api", "micrometer"],
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "selected": true, "text": "Prometheus", "value": "Prometheus" }
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "Transaction API - Overview",
+  "uid": "transaction-api-overview",
+  "version": 1
+}

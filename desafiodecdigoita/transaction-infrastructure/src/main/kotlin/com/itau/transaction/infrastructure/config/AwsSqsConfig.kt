@@ -1,6 +1,8 @@
 package com.itau.transaction.infrastructure.config
 
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
@@ -11,6 +13,8 @@ import java.net.URI
 
 @Configuration
 class AwsSqsConfig {
+
+    private val log = LoggerFactory.getLogger(javaClass)
 
     @Value("\${aws.endpoint-url:http://localhost:4566}")
     private lateinit var endpointUrl: String
@@ -26,6 +30,17 @@ class AwsSqsConfig {
 
     @Bean
     fun sqsClient(): SqsClient {
+        if (endpointUrl.isBlank()) {
+            log.warn("AWS endpoint URL is blank, creating SQS client with default endpoint")
+            val credentials = StaticCredentialsProvider.create(
+                AwsBasicCredentials.create(accessKeyId, secretAccessKey)
+            )
+            return SqsClient.builder()
+                .credentialsProvider(credentials)
+                .region(Region.of(region))
+                .build()
+        }
+        log.info("Creating SQS client with endpoint: {}", endpointUrl)
         val credentials = StaticCredentialsProvider.create(
             AwsBasicCredentials.create(accessKeyId, secretAccessKey)
         )

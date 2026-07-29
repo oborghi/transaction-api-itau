@@ -1,0 +1,164 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "JVM Memory Used (Heap)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "unit": "bytes" }
+      },
+      "targets": [
+        {
+          "expr": "jvm_memory_used_bytes{area=\"heap\"}",
+          "legendFormat": "{{id}} Used"
+        },
+        {
+          "expr": "jvm_memory_max_bytes{area=\"heap\"}",
+          "legendFormat": "{{id}} Max"
+        }
+      ]
+    },
+    {
+      "title": "JVM Memory Used (Non-Heap)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "unit": "bytes" }
+      },
+      "targets": [
+        {
+          "expr": "jvm_memory_used_bytes{area=\"nonheap\"}",
+          "legendFormat": "{{id}} Used"
+        }
+      ]
+    },
+    {
+      "title": "JVM GC Pause Duration",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      },
+      "targets": [
+        {
+          "expr": "rate(jvm_gc_pause_seconds_sum[5m])",
+          "legendFormat": "{{action}} - {{cause}}"
+        }
+      ]
+    },
+    {
+      "title": "JVM Threads Live",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "jvm_threads_live_threads",
+          "legendFormat": "Live Threads"
+        },
+        {
+          "expr": "jvm_threads_daemon_threads",
+          "legendFormat": "Daemon Threads"
+        }
+      ]
+    },
+    {
+      "title": "HTTP Request Rate",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count[5m])) by (method, uri, status)",
+          "legendFormat": "{{method}} {{uri}} {{status}}"
+        }
+      ]
+    },
+    {
+      "title": "HTTP Response Time P50/P90/P95",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum(rate(http_server_requests_seconds_bucket[5m])) by (le, method, uri))",
+          "legendFormat": "P50 {{method}} {{uri}}"
+        },
+        {
+          "expr": "histogram_quantile(0.9, sum(rate(http_server_requests_seconds_bucket[5m])) by (le, method, uri))",
+          "legendFormat": "P90 {{method}} {{uri}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[5m])) by (le, method, uri))",
+          "legendFormat": "P95 {{method}} {{uri}}"
+        }
+      ]
+    },
+    {
+      "title": "Caffeine Cache Hit Rate",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit" }
+      },
+      "targets": [
+        {
+          "expr": "rate(cache_gets_total{cache=\"jwt-tokens\", result=\"hit\"}[5m]) / rate(cache_gets_total{cache=\"jwt-tokens\"}[5m])",
+          "legendFormat": "JWT Cache Hit Rate"
+        }
+      ]
+    },
+    {
+      "title": "System CPU Usage",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "max": 1 }
+      },
+      "targets": [
+        {
+          "expr": "system_cpu_usage",
+          "legendFormat": "System CPU"
+        },
+        {
+          "expr": "process_cpu_usage",
+          "legendFormat": "Process CPU"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["transaction-api", "jvm", "infrastructure"],
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "selected": true, "text": "Prometheus", "value": "Prometheus" }
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "Transaction API - Infrastructure",
+  "uid": "infrastructure",
+  "version": 1
+}

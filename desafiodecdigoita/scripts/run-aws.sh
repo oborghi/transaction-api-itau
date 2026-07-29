@@ -19,6 +19,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 ENVIRONMENT="${ENVIRONMENT:-dev}"
 AWS_REGION="${AWS_DEFAULT_REGION:-sa-east-1}"
 TFVARS_FILE="environments/${ENVIRONMENT}.tfvars"
+AUTO_APPROVE="${AUTO_APPROVE:-false}"
 
 echo "☁️  =========================================="
 echo "   Deploy AWS - Transaction API"
@@ -130,14 +131,20 @@ if [ $? -ne 0 ]; then
 fi
 
 echo ""
-echo "   ⚠️  Plano Terraform gerado. Revise as mudancas acima."
-echo "   Para aplicar automaticamente, pressione ENTER ou cancele com Ctrl+C."
-read -r -p "   Aplicar plano? [S/n] " CONFIRM
-CONFIRM=${CONFIRM:-S}
+echo "   ⚠️  Plano Terraform gerado."
 
-if [[ ! "$CONFIRM" =~ ^[Ss]$ ]]; then
-    echo "   Deploy cancelado pelo usuario."
-    exit 0
+# Modo CI/CD: AUTO_APPROVE=true pula a confirmação interativa
+if [ "$AUTO_APPROVE" = "true" ]; then
+    echo "   Modo AUTO_APPROVE habilitado. Aplicando automaticamente..."
+else
+    echo "   Para aplicar automaticamente, use: AUTO_APPROVE=true $0"
+    read -r -p "   Aplicar plano? [S/n] " CONFIRM
+    CONFIRM=${CONFIRM:-S}
+
+    if [[ ! "$CONFIRM" =~ ^[Ss]$ ]]; then
+        echo "   Deploy cancelado pelo usuario."
+        exit 0
+    fi
 fi
 
 # Aplicar mudancas

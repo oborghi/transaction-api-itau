@@ -67,7 +67,7 @@ app:
 resilience4j:
   circuitbreaker:
     instances:
-      mongoDbCircuitBreaker:
+      mongoDb:
         slidingWindowSize: 10
         minimumNumberOfCalls: 5
         failureRateThreshold: 50
@@ -98,7 +98,7 @@ resilience4j:
           - com.mongodb.MongoException
 
 # ==========================================
-# Actuator (shared across all profiles)
+# Actuator + Tracing (shared across all profiles)
 # ==========================================
 management:
   endpoints:
@@ -108,10 +108,13 @@ management:
   endpoint:
     health:
       show-details: always
-  metrics:
-    export:
-      prometheus:
+  prometheus:
+    metrics:
+      export:
         enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
 
 # ==========================================
 # Consul (disabled by default, enabled in docker profile)
@@ -141,6 +144,17 @@ spring.cloud.vault:
     default-context: transaction-api
     application-name: transaction-api
 
+# ==========================================
+# OpenTelemetry (via Micrometer bridge → Jaeger)
+# ==========================================
+otel:
+  service:
+    name: transaction-api
+    version: 1.0.0
+  exporter:
+    otlp:
+      endpoint: http://jaeger:4318
+      protocol: http
 # ==========================================
 # Logging (defaults - overridden per profile)
 # ==========================================

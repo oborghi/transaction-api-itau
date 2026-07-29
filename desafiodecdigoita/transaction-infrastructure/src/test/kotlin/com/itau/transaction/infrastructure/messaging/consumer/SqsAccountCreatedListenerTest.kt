@@ -1,6 +1,7 @@
 package com.itau.transaction.infrastructure.messaging.consumer
 
 import com.itau.transaction.application.consumer.AccountCreatedConsumer
+import com.itau.transaction.application.port.MetricsPort
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -29,11 +30,14 @@ class SqsAccountCreatedListenerTest {
     @Mock
     private lateinit var accountCreatedConsumer: AccountCreatedConsumer
 
+    @Mock
+    private lateinit var metricsPort: MetricsPort
+
     private lateinit var listener: SqsAccountCreatedListener
 
     @BeforeEach
     fun setUp() {
-        listener = SqsAccountCreatedListener(sqsClient, accountCreatedConsumer)
+        listener = SqsAccountCreatedListener(sqsClient, accountCreatedConsumer, metricsPort)
         // Set queueUrl via reflection since it's @Value injected
         val field = SqsAccountCreatedListener::class.java.getDeclaredField("queueUrl")
         field.isAccessible = true

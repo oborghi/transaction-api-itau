@@ -1,6 +1,7 @@
 package com.itau.transaction.infrastructure.messaging.consumer
 
 import com.itau.transaction.application.consumer.AccountCreatedConsumer
+import com.itau.transaction.application.port.MetricsPort
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.scheduling.annotation.Scheduled
@@ -12,7 +13,8 @@ import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest
 @Component
 class SqsAccountCreatedListener(
     private val sqsClient: SqsClient,
-    private val accountCreatedConsumer: AccountCreatedConsumer
+    private val accountCreatedConsumer: AccountCreatedConsumer,
+    private val metricsPort: MetricsPort
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -33,9 +35,11 @@ class SqsAccountCreatedListener(
             messages.forEach { message ->
                 try {
                     accountCreatedConsumer.consume(message.body())
+                    metricsPort.recordSqsMessageConsumed()
                     deleteMessage(message.receiptHandle())
                     logger.info("Successfully processed message {}", message.messageId())
                 } catch (e: Exception) {
+                    metricsPort.recordSqsMessageFailed()
                     logger.error("Failed to process message {}: {}", message.messageId(), e.message)
                 }
             }

@@ -2,6 +2,7 @@ package com.itau.transaction.application.service
 
 import com.itau.transaction.application.dto.request.AmountRequest
 import com.itau.transaction.application.dto.request.TransactionRequest
+import com.itau.transaction.application.port.MetricsPort
 import com.itau.transaction.domain.exception.AccountNotFoundException
 import com.itau.transaction.domain.model.*
 import com.itau.transaction.domain.port.AccountRepositoryPort
@@ -34,6 +35,9 @@ class AuthorizeTransactionUseCaseTest {
     @Mock
     private lateinit var transactionRepository: TransactionRepositoryPort
 
+    @Mock
+    private lateinit var metricsPort: MetricsPort
+
     @InjectMocks
     private lateinit var authorizeTransactionUseCase: AuthorizeTransactionUseCase
 
@@ -41,6 +45,12 @@ class AuthorizeTransactionUseCaseTest {
 
     @BeforeEach
     fun setUp() {
+        // Configure recordAuthorizationLatency to execute the block (pass-through)
+        whenever(metricsPort.recordAuthorizationLatency(any<() -> Any>())).thenAnswer { invocation ->
+            val block = invocation.getArgument<() -> Any>(0)
+            block.invoke()
+        }
+
         enabledAccount = Account(
             id = "account-123",
             owner = "owner-456",

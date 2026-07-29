@@ -6,17 +6,22 @@ import com.itau.transaction.domain.exception.InsufficientBalanceException
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ControllerAdvice
+import com.itau.transaction.application.port.MetricsPort
 import org.springframework.web.bind.annotation.ExceptionHandler
 
 @ControllerAdvice
-class GlobalExceptionHandler {
+class GlobalExceptionHandler(
+    private val metricsPort: MetricsPort
+) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
     @ExceptionHandler(AccountNotFoundException::class)
     fun handleAccountNotFound(ex: AccountNotFoundException): ResponseEntity<ErrorResponse> {
         logger.warn("Account not found: {}", ex.message)
+        metricsPort.recordTransaction("UNKNOWN", "FAILED") // Record the failure metric
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(
             ErrorResponse(
                 error = "ACCOUNT_NOT_FOUND",
@@ -55,6 +60,17 @@ class GlobalExceptionHandler {
             ErrorResponse(
                 error = "VALIDATION_ERROR",
                 message = message
+            )
+        )
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException::class, IllegalArgumentException::class)
+    fun handleBadRequest(ex: Exception): ResponseEntity<ErrorResponse> {
+        logger.warn("Invalid request: {}", ex.message)
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+            ErrorResponse(
+                error = "INVALID_REQUEST",
+                message = "Invalid request payload"
             )
         )
     }

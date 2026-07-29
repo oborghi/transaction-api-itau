@@ -11,6 +11,25 @@
       "item": [
         {
           "name": "Generate Token (Valid Credentials)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (pm.response.code === 200 && jsonData.token) {",
+                  "    pm.environment.set('TOKEN', jsonData.token);",
+                  "    pm.environment.set('TOKEN_EXPIRES_IN', jsonData.expires_in);",
+                  "    pm.environment.set('TOKEN_EXPIRES_AT', jsonData.expires_at);",
+                  "    console.log('✅ Token saved to environment: ' + jsonData.token.substring(0, 20) + '...');",
+                  "} else {",
+                  "    console.log('❌ Failed to get token: ' + pm.response.code);",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -21,7 +40,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"client_id\": \"transaction-api-client\",\n  \"client_secret\": \"super-secret-key-123\"\n}"
+              "raw": "{\n  \"client_id\": \"{{CLIENT_ID}}\",\n  \"client_secret\": \"{{CLIENT_SECRET}}\"\n}"
             },
             "url": {
               "raw": "{{BASE_URL}}/api/v1/auth/token",
@@ -58,6 +77,23 @@
       "item": [
         {
           "name": "CREDIT Transaction (200 OK)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Transaction succeeded', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.transaction.status).to.eql('SUCCEEDED');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -72,7 +108,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"account_id\": \"{{ACCOUNT_ID}}\",\n  \"type\": \"CREDIT\",\n  \"amount\": {\n    \"value\": 100.00,\n    \"currency\": \"BRL\"\n  }\n}"
+              "raw": "{\n  \"account_id\": \"{{ACCOUNT_ID}}\",\n  \"type\": \"CREDIT\",\n  \"amount\": {\n    \"value\": {{CREDIT_AMOUNT}},\n    \"currency\": \"{{CURRENCY}}\"\n  }\n}"
             },
             "url": {
               "raw": "{{BASE_URL}}/api/v1/transactions/{{TRANSACTION_ID}}",
@@ -83,6 +119,23 @@
         },
         {
           "name": "DEBIT Transaction (200 OK)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Transaction succeeded', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.transaction.status).to.eql('SUCCEEDED');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -97,7 +150,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"account_id\": \"{{ACCOUNT_ID}}\",\n  \"type\": \"DEBIT\",\n  \"amount\": {\n    \"value\": 50.00,\n    \"currency\": \"BRL\"\n  }\n}"
+              "raw": "{\n  \"account_id\": \"{{ACCOUNT_ID}}\",\n  \"type\": \"DEBIT\",\n  \"amount\": {\n    \"value\": {{DEBIT_AMOUNT}},\n    \"currency\": \"{{CURRENCY}}\"\n  }\n}"
             },
             "url": {
               "raw": "{{BASE_URL}}/api/v1/transactions/{{TRANSACTION_ID}}",
@@ -108,6 +161,23 @@
         },
         {
           "name": "DEBIT Insufficient Balance (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 422', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "pm.test('Error is INSUFFICIENT_BALANCE', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.error).to.eql('INSUFFICIENT_BALANCE');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -122,7 +192,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"account_id\": \"{{ACCOUNT_ID}}\",\n  \"type\": \"DEBIT\",\n  \"amount\": {\n    \"value\": 99999.00,\n    \"currency\": \"BRL\"\n  }\n}"
+              "raw": "{\n  \"account_id\": \"{{ACCOUNT_ID}}\",\n  \"type\": \"DEBIT\",\n  \"amount\": {\n    \"value\": {{INSUFFICIENT_DEBIT_AMOUNT}},\n    \"currency\": \"{{CURRENCY}}\"\n  }\n}"
             },
             "url": {
               "raw": "{{BASE_URL}}/api/v1/transactions/{{TRANSACTION_ID}}",
@@ -133,6 +203,23 @@
         },
         {
           "name": "Account Not Found (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 422', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "pm.test('Error is ACCOUNT_NOT_FOUND', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.error).to.eql('ACCOUNT_NOT_FOUND');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -147,7 +234,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"account_id\": \"non-existent-account-id\",\n  \"type\": \"CREDIT\",\n  \"amount\": {\n    \"value\": 100.00,\n    \"currency\": \"BRL\"\n  }\n}"
+              "raw": "{\n  \"account_id\": \"{{NON_EXISTENT_ACCOUNT_ID}}\",\n  \"type\": \"CREDIT\",\n  \"amount\": {\n    \"value\": {{CREDIT_AMOUNT}},\n    \"currency\": \"{{CURRENCY}}\"\n  }\n}"
             },
             "url": {
               "raw": "{{BASE_URL}}/api/v1/transactions/{{TRANSACTION_ID}}",
@@ -158,6 +245,19 @@
         },
         {
           "name": "No Token (403 Forbidden)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -168,7 +268,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"account_id\": \"{{ACCOUNT_ID}}\",\n  \"type\": \"CREDIT\",\n  \"amount\": {\n    \"value\": 100.00,\n    \"currency\": \"BRL\"\n  }\n}"
+              "raw": "{\n  \"account_id\": \"{{ACCOUNT_ID}}\",\n  \"type\": \"CREDIT\",\n  \"amount\": {\n    \"value\": {{CREDIT_AMOUNT}},\n    \"currency\": \"{{CURRENCY}}\"\n  }\n}"
             },
             "url": {
               "raw": "{{BASE_URL}}/api/v1/transactions/{{TRANSACTION_ID}}",
@@ -184,6 +284,23 @@
       "item": [
         {
           "name": "Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Health is UP', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql('UP');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "url": {
@@ -206,12 +323,40 @@
       "value": ""
     },
     {
+      "key": "CLIENT_ID",
+      "value": "transaction-api-client"
+    },
+    {
+      "key": "CLIENT_SECRET",
+      "value": "super-secret-key-123"
+    },
+    {
       "key": "ACCOUNT_ID",
       "value": "5b19c8b6-0cc4-4c72-a989-0c2ee15fa975"
     },
     {
+      "key": "NON_EXISTENT_ACCOUNT_ID",
+      "value": "non-existent-account-id"
+    },
+    {
       "key": "TRANSACTION_ID",
       "value": "{{$guid}}"
+    },
+    {
+      "key": "CREDIT_AMOUNT",
+      "value": "100.00"
+    },
+    {
+      "key": "DEBIT_AMOUNT",
+      "value": "50.00"
+    },
+    {
+      "key": "INSUFFICIENT_DEBIT_AMOUNT",
+      "value": "99999.00"
+    },
+    {
+      "key": "CURRENCY",
+      "value": "BRL"
     }
   ]
 }

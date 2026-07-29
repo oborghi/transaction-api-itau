@@ -9,6 +9,10 @@ scrape_configs:
       - targets: ['transaction-api:8080']
         labels:
           app: 'transaction-api'
+          environment: 'docker'
+      - targets: ['host.docker.internal:8080']
+        labels:
+          app: 'transaction-api'
           environment: 'local'
 
   - job_name: 'prometheus'

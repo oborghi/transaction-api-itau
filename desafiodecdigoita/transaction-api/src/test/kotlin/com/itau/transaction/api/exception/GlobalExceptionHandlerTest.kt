@@ -6,6 +6,7 @@ import com.itau.transaction.domain.exception.InsufficientBalanceException
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.InjectMocks
+import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.MethodArgumentNotValidException
@@ -14,9 +15,13 @@ import org.springframework.web.context.request.WebRequest
 import java.math.BigDecimal
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import com.itau.transaction.application.port.MetricsPort
 
 @ExtendWith(MockitoExtension::class)
 class GlobalExceptionHandlerTest {
+
+    @Mock
+    private lateinit var metricsPort: MetricsPort
 
     @InjectMocks
     private lateinit var globalExceptionHandler: GlobalExceptionHandler

@@ -1,15 +1,67 @@
 spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.cloud.consul.serviceregistry.ConsulServiceRegistryAutoConfiguration
+      - org.springframework.cloud.consul.serviceregistry.ConsulAutoServiceRegistrationAutoConfiguration
+      - org.springframework.cloud.consul.config.ConsulAutoConfiguration
+      - org.springframework.cloud.consul.discovery.ConsulDiscoveryClientAutoConfiguration
   data:
     mongodb:
-      uri: mongodb://admin:admin123@localhost:27017/transaction_db_test?authSource=admin
+      uri: mongodb://admin:admin123@localhost:27017/transaction_db?authSource=admin
+  cache:
+    type: caffeine
+    caffeine:
+      spec: maximumSize=1000,expireAfterWrite=24h
+    cache-names:
+      - jwt-tokens
+  cloud:
+    consul:
+      config:
+        enabled: false
+      discovery:
+        enabled: false
+    vault:
+      enabled: false
+
+# Fixed JWT secrets for test profile (no DynamicPropertySource needed)
+app:
+  security:
+    jwt:
+      secret: IntegrationTestSecretKeyForTestingOnly2024!
+      expiration: 86400
+      issuer: transaction-api-test
+    clients:
+      - id: transaction-api-client
+        secret: super-secret-key-123
+        roles: [ADMIN, API]
+  sqs:
+    queue-url: ""
+    dlq-url: ""
+    poll-interval: 1000
 
 aws:
   endpoint-url: http://localhost:4566
+  region: sa-east-1
+  access-key-id: test
+  secret-access-key: test
 
-app:
-  sqs:
-    queue-url: http://localhost:4566/000000000000/conta-bancaria-criada
-    poll-interval: 1000
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  health:
+    consul:
+      enabled: false
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+resilience4j:
+  circuitbreaker:
+    metrics:
+      enabled: true
 
 logging:
   level:

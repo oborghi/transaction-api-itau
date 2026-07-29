@@ -1,5 +1,6 @@
 package com.itau.transaction.infrastructure.scheduler
 
+import com.itau.transaction.infrastructure.config.TransactionMetrics
 import com.itau.transaction.infrastructure.messaging.reprocessor.DlqMessageReprocessor
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -26,7 +27,8 @@ import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest
 class DlqReprocessorScheduler(
     private val sqsClient: SqsClient,
     private val reprocessor: DlqMessageReprocessor,
-    @Value("\${app.sqs.dlq-url}") private val dlqUrl: String,
+    private val transactionMetrics: TransactionMetrics,
+    @Value("\${app.sqs.dlq-url:}") private val dlqUrl: String,
     @Value("\${app.dlq.reprocessor.max-batch-size:10}") private val maxBatchSize: Int
 ) {
 
@@ -35,6 +37,11 @@ class DlqReprocessorScheduler(
     @Scheduled(fixedDelayString = "\${app.dlq.reprocessor.interval:PT5M}")
     fun reprocessDlqMessages() {
         log.info("Starting DLQ reprocessing cycle")
+
+        if (dlqUrl.isBlank()) {
+            log.debug("DLQ URL not configured, skipping reprocessing cycle")
+            return
+        }
 
         val messages = try {
             sqsClient.receiveMessage(
@@ -59,18 +66,20 @@ class DlqReprocessorScheduler(
         var successCount = 0
         var failCount = 0
 
-        messages.forEach { message ->
-            try {
-                reprocessor.reprocess(message)
-                deleteMessage(message)
-                successCount++
-                log.info("Successfully reprocessed DLQ message ${message.messageId()}")
-            } catch (e: Exception) {
-                failCount++
-                log.warn("Failed to reprocess DLQ message ${message.messageId()}: ${e.message}")
-                // Message returns to DLQ with visibility timeout
+            messages.forEach { message ->
+                try {
+                    reprocessor.reprocess(message)
+                    deleteMessage(message)
+                    successCount++
+                    transactionMetrics.recordDlqMessageReprocessed(true)
+                    log.info("Successfully reprocessed DLQ message ${message.messageId()}")
+                } catch (e: Exception) {
+                    failCount++
+                    transactionMetrics.recordDlqMessageReprocessed(false)
+                    log.warn("Failed to reprocess DLQ message ${message.messageId()}: ${e.message}")
+                    // Message returns to DLQ with visibility timeout
+                }
             }
-        }
 
         log.info("DLQ reprocessing cycle completed: $successCount succeeded, $failCount failed")
     }

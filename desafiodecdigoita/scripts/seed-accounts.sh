@@ -26,8 +26,7 @@ for i in $(seq 1 10); do
         --region sa-east-1 \
         sqs send-message \
         --queue-url http://localhost:4566/000000000000/conta-bancaria-criada \
-        --message-body "{\"account\":{\"id\":\"$ACCOUNT_ID\",\"owner\":\"$OWNER_ID\",\"created_at\":\"$CREATED_AT\",\"status\":\"ENABLED\"}}" \
-        --message-content-type "application/json"
+        --message-body "{\"account\":{\"id\":\"$ACCOUNT_ID\",\"owner\":\"$OWNER_ID\",\"created_at\":\"$CREATED_AT\",\"status\":\"ENABLED\"}}"
 
     echo "   ✅ Conta $i: $ACCOUNT_ID"
 done

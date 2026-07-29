@@ -1,39 +1,65 @@
 #!/bin/bash
 set -e
 
+# ==========================================
+# Transaction API - Docker Profile
+# ==========================================
+# Roda toda a aplicação em containers Docker:
+#   - LocalStack (SQS)
+#   - MongoDB
+#   - Vault (Secrets)
+#   - Consul (Config)
+#   - Transaction API (Spring Boot)
+#   - Prometheus, Grafana, Jaeger, Loki (Observability)
+#
+# Uso: ./scripts/run-docker.sh
+# ==========================================
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$PROJECT_DIR"
+
 echo "🐳 Iniciando ambiente Docker..."
 echo "   - LocalStack (SQS)"
 echo "   - MongoDB"
 echo "   - Vault (Secrets)"
 echo "   - Consul (Config)"
 echo "   - Transaction API"
+echo "   - Prometheus / Grafana / Jaeger / Loki"
 echo ""
 
-# Verifica se Docker está rodando
+# ==========================================
+# 1. Verificar pré-requisitos
+# ==========================================
 if ! docker info > /dev/null 2>&1; then
     echo "❌ Docker não está rodando. Inicie o Docker e tente novamente."
     exit 1
 fi
 
-# Criar pastas de dados (volumes do host)
+# ==========================================
+# 2. Parar serviços anteriores via stop-all.sh
+# ==========================================
+echo "🛑 Parando serviços anteriores..."
+bash "$SCRIPT_DIR/stop-all.sh"
+
+# Criar pastas de dados
 mkdir -p data/{mongodb,prometheus,loki,grafana,vault,consul}
 
-# Limpar dados anteriores
 echo "🧹 Limpando dados anteriores..."
 rm -rf data/consul/* data/mongodb/* data/prometheus/* data/loki/* data/grafana/* data/vault/* 2>/dev/null || true
 
-# Para containers anteriores e limpa volumes
-echo "🛑 Parando containers anteriores e limpando volumes..."
-docker compose down -v 2>/dev/null || true
-
-# Sobe apenas infraestrutura primeiro (Vault, MongoDB, LocalStack, Consul)
+# ==========================================
+# 3. Subir infraestrutura (Vault, MongoDB, LocalStack, Consul)
+# ==========================================
 echo "📦 Subindo infraestrutura..."
 docker compose up -d localstack mongodb vault consul
 
+# ==========================================
+# 4. Aguardar Vault ficar saudável
+# ==========================================
 echo ""
 echo "⏳ Aguardando Vault ficar saudável..."
 
-# Aguarda Vault ficar pronto
 MAX_RETRIES=20
 RETRY_COUNT=0
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
@@ -51,40 +77,48 @@ if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
     exit 1
 fi
 
-# Inicializa filas SQS no LocalStack
+# ==========================================
+# 5. Inicializar filas SQS no LocalStack
+# ==========================================
 echo ""
 echo "📨 Inicializando filas SQS no LocalStack..."
 
-# Cria filas SQS
+# Aguarda LocalStack estar pronto
+sleep 3
+
 docker exec localstack aws --endpoint-url=http://localhost:4566 --region sa-east-1 sqs create-queue --queue-name conta-bancaria-criada 2>/dev/null || true
 docker exec localstack aws --endpoint-url=http://localhost:4566 --region sa-east-1 sqs create-queue --queue-name conta-bancaria-criada-dlq 2>/dev/null || true
 echo "   ✅ Filas SQS criadas"
 
-# Popula Vault com secrets usando docker exec
+# ==========================================
+# 6. Popula Vault com secrets
+# ==========================================
 echo ""
 echo "🔐 Populando Vault com secrets..."
 
-# Aguarda Vault estar pronto para writes
 sleep 2
 
-# Enable KV secrets engine
-docker exec vault vault secrets enable -path=secret kv-v2 2>/dev/null || true
+# Vault CLI via docker exec precisa de VAULT_ADDR e VAULT_TOKEN
+VAULT_ENV="-e VAULT_ADDR=http://localhost:8200 -e VAULT_TOKEN=root-token"
+
+# Enable KV secrets engine (pode já estar habilitado em dev mode)
+docker exec $VAULT_ENV vault vault secrets enable -path=secret kv-v2 2>/dev/null || true
 
 # MongoDB secret
-docker exec vault vault kv put secret/transaction-api/mongodb \
+docker exec $VAULT_ENV vault vault kv put secret/transaction-api/mongodb \
   uri="mongodb://admin:admin123@mongodb:27017/transaction_db?authSource=admin" \
   username="admin" \
   password="admin123"
 echo "   ✅ MongoDB secret"
 
 # JWT secret
-docker exec vault vault kv put secret/transaction-api/jwt \
+docker exec $VAULT_ENV vault vault kv put secret/transaction-api/jwt \
   secret="MyDefaultSecretKeyForDevelopmentOnly2024!" \
   issuer="transaction-api"
 echo "   ✅ JWT secret"
 
 # AWS/SQS secret
-docker exec vault vault kv put secret/transaction-api/sqs \
+docker exec $VAULT_ENV vault vault kv put secret/transaction-api/sqs \
   access_key="test" \
   secret_key="test" \
   region="sa-east-1" \
@@ -92,7 +126,7 @@ docker exec vault vault kv put secret/transaction-api/sqs \
 echo "   ✅ AWS/SQS secret"
 
 # API credentials
-docker exec vault vault kv put secret/transaction-api/credentials \
+docker exec $VAULT_ENV vault vault kv put secret/transaction-api/credentials \
   client_id="transaction-api-client" \
   client_secret="super-secret-key-123" \
   readonly_id="transaction-api-readonly" \
@@ -103,7 +137,9 @@ echo ""
 echo "✅ Todos os secrets populados no Vault!"
 echo "   Vault UI: http://localhost:8200 (token: root-token)"
 
-# Popula Consul com configs usando docker exec
+# ==========================================
+# 7. Popula Consul com configs
+# ==========================================
 echo ""
 echo "🗄️ Populando Consul com configs..."
 
@@ -121,15 +157,19 @@ docker exec consul consul kv put transaction-api/config/otel-enabled "true"
 echo "   ✅ Consul configs populados!"
 echo "   Consul UI: http://localhost:8500"
 
-# Sobe a aplicação
+# ==========================================
+# 8. Subir aplicação e observabilidade
+# ==========================================
 echo ""
-echo "🚀 Subindo Transaction API..."
-docker compose up -d --build transaction-api
+echo "🚀 Subindo Transaction API + Observability..."
+docker compose up -d --build transaction-api prometheus jaeger loki grafana
 
+# ==========================================
+# 9. Aguardar API ficar saudável
+# ==========================================
 echo ""
 echo "⏳ Aguardando API ficar saudável..."
 
-# Aguarda healthcheck da API
 MAX_RETRIES=30
 RETRY_COUNT=0
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
@@ -152,6 +192,27 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
         echo ""
         echo "📋 Vault UI: http://localhost:8200 (token: root-token)"
         echo "📋 Consul UI: http://localhost:8500"
+        echo ""
+        echo "📊 Observability:"
+        echo "   - Grafana:    http://localhost:3000  (admin / admin123)"
+        echo "   - Prometheus: http://localhost:9090"
+        echo "   - Jaeger:     http://localhost:16686"
+        echo "   - Loki:       http://localhost:3100"
+        echo ""
+
+        # Carrega dashboards do Grafana via API
+        echo "📊 Carregando dashboards Grafana..."
+        sleep 5
+        for f in observability/grafana/dashboards/*.json; do
+            if [ -f "$f" ]; then
+                curl -sf -u admin:admin123 -X POST -H "Content-Type: application/json" \
+                    -d "{\"dashboard\": $(cat "$f"), \"overwrite\": true}" \
+                    http://localhost:3000/api/dashboards/db > /dev/null 2>&1 || true
+            fi
+        done
+        echo "   ✅ Dashboards carregados"
+        echo ""
+        echo "Ambiente Docker pronto para testes! 🎉"
         exit 0
     fi
     RETRY_COUNT=$((RETRY_COUNT + 1))
@@ -159,6 +220,7 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     sleep 5
 done
 
+echo ""
 echo "❌ API não ficou saudável após $MAX_RETRIES tentativas."
 echo "   Verifique os logs: docker compose logs transaction-api"
 exit 1

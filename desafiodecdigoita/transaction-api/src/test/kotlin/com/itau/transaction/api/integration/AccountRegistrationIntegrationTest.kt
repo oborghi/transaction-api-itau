@@ -13,7 +13,7 @@ import org.testcontainers.junit.jupiter.Testcontainers
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 class AccountRegistrationIntegrationTest {
 
     companion object {
