@@ -15,8 +15,8 @@ resource "aws_security_group" "efs" {
     from_port       = 2049
     to_port         = 2049
     protocol        = "tcp"
-    security_groups = [aws_security_group.ecs.id]
-    description     = "NFS from ECS tasks"
+    security_groups = [aws_security_group.mongodb.id]
+    description     = "NFS from MongoDB ECS tasks"
   }
 
   egress {

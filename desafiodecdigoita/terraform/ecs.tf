@@ -1,5 +1,5 @@
 # ==========================================
-# ECS Fargate Cluster + Service
+# ECS Fargate Cluster + Services
 # ==========================================
 # Free Tier: Fargate with minimal CPU/Memory
 # Runs in public subnets (no NAT needed)
@@ -13,6 +13,7 @@ resource "aws_ecs_cluster" "main" {
     value = "enabled"
   }
 
+
   tags = { Name = "${var.app_name}_cluster" }
 }
 
@@ -23,7 +24,65 @@ resource "aws_cloudwatch_log_group" "ecs" {
   tags              = { Name = "${var.app_name}_ecs_logs" }
 }
 
-# Task Definition
+# ==========================================
+# Security Group for App ECS Tasks
+# ==========================================
+resource "aws_security_group" "ecs" {
+  name_prefix = "${var.app_name}_ecs_"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 8080
+    to_port         = 8080
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+    description     = "ALB to ECS"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound"
+  }
+
+  tags = { Name = "${var.app_name}_ecs_sg" }
+
+  lifecycle { create_before_destroy = true }
+}
+
+# ==========================================
+# Security Group for MongoDB ECS Tasks
+# ==========================================
+resource "aws_security_group" "mongodb" {
+  name_prefix = "${var.app_name}_mongodb_"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 27017
+    to_port         = 27017
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ecs.id]
+    description     = "App to MongoDB"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound"
+  }
+
+  tags = { Name = "${var.app_name}_mongodb_sg" }
+
+  lifecycle { create_before_destroy = true }
+}
+
+# ==========================================
+# App Task Definition (sem MongoDB)
+# ==========================================
 resource "aws_ecs_task_definition" "app" {
   family                   = var.app_name
   network_mode             = "awsvpc"
@@ -33,18 +92,10 @@ resource "aws_ecs_task_definition" "app" {
   execution_role_arn       = aws_iam_role.ecs_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 
-  volume {
-    name = "mongodb_data"
-    efs_volume_configuration {
-      file_system_id     = aws_efs_file_system.mongodb.id
-      transit_encryption = "ENABLED"
-    }
-  }
-
   container_definitions = jsonencode([
     {
-      name  = "${var.app_name}-app"
-      image = "${aws_ecr_repository.app.repository_url}:latest"
+      name      = "${var.app_name}-app"
+      image     = "${aws_ecr_repository.app.repository_url}:latest"
       essential = true
 
       portMappings = [
@@ -71,14 +122,7 @@ resource "aws_ecs_task_definition" "app" {
         { name = "ENVIRONMENT",              value = var.environment },
         { name = "SQS_QUEUE_URL",            value = aws_sqs_queue.main.url },
         { name = "SQS_DLQ_URL",              value = aws_sqs_queue.dlq.url },
-        { name = "SPRING_DATA_MONGODB_URI",  value = "mongodb://${var.db_master_username}:${urlencode(var.db_master_password)}@localhost:27017/transaction_db?authSource=admin&directConnection=true" }
-      ]
-
-      dependsOn = [
-        {
-          containerName = "mongodb"
-          condition     = "HEALTHY"
-        }
+        { name = "SPRING_DATA_MONGODB_URI",  value = "mongodb://${var.db_master_username}:${urlencode(var.db_master_password)}@mongodb.${var.app_name}.internal:27017/transaction_db?authSource=admin" }
       ]
 
       logConfiguration = {
@@ -97,10 +141,36 @@ resource "aws_ecs_task_definition" "app" {
         retries     = 3
         startPeriod = 120
       }
-    },
+    }
+  ])
+
+  tags = { Name = "${var.app_name}_task_def" }
+}
+
+# ==========================================
+# MongoDB Task Definition
+# ==========================================
+resource "aws_ecs_task_definition" "mongodb" {
+  family                   = "${var.app_name}-mongodb"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = "256"
+  memory                   = "512"
+  execution_role_arn       = aws_iam_role.ecs_execution.arn
+  task_role_arn            = aws_iam_role.ecs_task.arn
+
+  volume {
+    name = "mongodb_data"
+    efs_volume_configuration {
+      file_system_id     = aws_efs_file_system.mongodb.id
+      transit_encryption = "ENABLED"
+    }
+  }
+
+  container_definitions = jsonencode([
     {
-      name  = "mongodb"
-      image = "mongo:7.0"
+      name      = "mongodb"
+      image     = "mongo:7.0"
       essential = true
 
       portMappings = [
@@ -110,7 +180,7 @@ resource "aws_ecs_task_definition" "app" {
         }
       ]
 
-          command = ["sh", "-c", "rm -f /data/db/mongod.lock && exec docker-entrypoint.sh mongod"]
+      command = ["sh", "-c", "rm -f /data/db/mongod.lock && exec docker-entrypoint.sh mongod"]
 
       environment = [
         { name = "MONGO_INITDB_ROOT_USERNAME", value = var.db_master_username },
@@ -145,10 +215,12 @@ resource "aws_ecs_task_definition" "app" {
     }
   ])
 
-  tags = { Name = "${var.app_name}_task_def" }
+  tags = { Name = "${var.app_name}_mongodb_task_def" }
 }
 
-# ECS Service
+# ==========================================
+# App ECS Service
+# ==========================================
 resource "aws_ecs_service" "app" {
   name            = "${var.app_name}_service"
   cluster         = aws_ecs_cluster.main.id
@@ -180,28 +252,26 @@ resource "aws_ecs_service" "app" {
   tags = { Name = "${var.app_name}_service" }
 }
 
-# Security Group for ECS Tasks
-resource "aws_security_group" "ecs" {
-  name_prefix = "${var.app_name}_ecs_"
-  vpc_id      = aws_vpc.main.id
+# ==========================================
+# MongoDB ECS Service
+# ==========================================
+resource "aws_ecs_service" "mongodb" {
+  name            = "${var.app_name}_mongodb_service"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.mongodb.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
 
-  ingress {
-    from_port       = 8080
-    to_port         = 8080
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-    description     = "ALB to ECS"
+  network_configuration {
+    subnets          = aws_subnet.public[*].id
+    security_groups  = [aws_security_group.mongodb.id]
+    assign_public_ip = true
   }
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow all outbound"
+  service_registries {
+    registry_arn   = aws_service_discovery_service.mongodb.arn
+    container_name = "mongodb"
   }
 
-  tags = { Name = "${var.app_name}_ecs_sg" }
-
-  lifecycle { create_before_destroy = true }
+  tags = { Name = "${var.app_name}_mongodb_service" }
 }

@@ -52,7 +52,17 @@ output "cloudwatch_dashboard" {
   value       = aws_cloudwatch_dashboard.overview.dashboard_name
 }
 
+output "mongodb_service_name" {
+  description = "MongoDB ECS service name"
+  value       = aws_ecs_service.mongodb.name
+}
+
+output "mongodb_host" {
+  description = "MongoDB hostname via Service Discovery (app connect string)"
+  value       = "mongodb.${var.app_name}.internal"
+}
+
 output "deploy_command" {
-  description = "Command to force new ECS deployment"
+  description = "Command to force new ECS deployment (app only, MongoDB stays untouched)"
   value       = "aws ecs update-service --cluster ${aws_ecs_cluster.main.name} --service ${aws_ecs_service.app.name} --force-new-deployment --region ${var.aws_region}"
 }

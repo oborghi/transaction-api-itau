@@ -73,7 +73,7 @@ Sistema de autorização de transações financeiras que:
 2. **Autoriza transações** (crédito/débito) via REST API
 3. **Garante resiliência** com Circuit Breaker, Dead Letter Queue e Retry
 4. **Configuração via Secrets Manager** — credenciais e URIs são carregadas do AWS Secrets Manager
-5. **Arquitetura AWS Free Tier** — ECS Fargate + MongoDB sidecar + EFS + ALB + SQS
+5. **Arquitetura AWS Free Tier** — ECS Fargate (2 tasks) + MongoDB + EFS + ALB + SQS + Service Discovery
 
 ---
 
@@ -85,12 +85,17 @@ graph TB
         subgraph "VPC (10.0.0.0/16)"
             subgraph "Public Subnets"
                 ALB["ALB<br/>HTTP:80"]
-                ECS["ECS Fargate<br/>512 CPU / 1024 MB"]
-                subgraph "ECS Task (2 containers)"
-                    APP["transaction-api-app<br/>Port 8080"]
+                
+                subgraph "ECS Task - MongoDB"
                     MONGO["mongodb:7.0<br/>Port 27017"]
+                    EFS_MONGO["EFS<br/>MongoDB /data/db"]
                 end
-                EFS["EFS<br/>Persistent Storage<br/>MongoDB /data/db"]
+
+                subgraph "ECS Task - App"
+                    APP["transaction-api-app<br/>Port 8080"]
+                end
+                
+                SD["Service Discovery<br/>mongodb.transaction-api.internal"]
             end
         end
 
@@ -105,8 +110,10 @@ graph TB
 
     Client["👤 Cliente"] -->|"HTTP:80"| ALB
     ALB -->|"forward"| APP
-    APP -->|"localhost:27017"| MONGO
-    MONGO -->|"/data/db"| EFS
+    APP -->|"mongodb.transaction-api.internal:27017"| MONGO
+    MONGO -->|"/data/db"| EFS_MONGO
+    MONGO -.->|"service discovery"| SD
+    SD -.->|"resolve DNS"| APP
     APP --> SQS
     SQS -.->|"maxReceiveCount=5"| DLQ
     APP --> CW
@@ -124,7 +131,7 @@ graph TB
 | **Docker** (`run-docker.sh`) | `docker-compose.yml` → `SPRING_DATA_MONGODB_URI` | `mongodb://admin:admin123@mongodb:27017/transaction_db?authSource=admin` |
 | **AWS** (`run-aws.sh`) | Task Definition → `SPRING_DATA_MONGODB_URI` | `mongodb://admin:<password>@localhost:27017/transaction_db?authSource=admin&directConnection=true` |
 
-> 💡 Na AWS, o MongoDB roda como **sidecar** no mesmo task do ECS Fargate, acessível via `localhost:27017`. O EFS montado em `/data/db` garante persistência mesmo com restart do container.
+> 💡 Na AWS, o MongoDB roda em uma **ECS Task separada** da aplicação, acessível via Service Discovery (`mongodb.transaction-api.internal:27017`). O EFS montado em `/data/db` garante persistência mesmo com restart do container.
 
 ---
 
@@ -189,8 +196,8 @@ ENVIRONMENT=dev AUTO_APPROVE=true ./scripts/deploy-aws.sh
 4. Provisiona infraestrutura com Terraform:
    - VPC + 2 subnets públicas + Internet Gateway
    - ALB (HTTP porta 80)
-   - ECS Fargate Cluster + Service (1 tarefa, 2 containers)
-   - MongoDB 7.0 como sidecar no ECS com EFS persistente
+   - ECS Fargate Cluster + 2 Services (1 task para App, 1 task para MongoDB)
+   - MongoDB 7.0 em task separada com EFS persistente + Service Discovery
    - ECR (repositório de imagens)
    - SQS + DLQ
    - Secrets Manager (JWT, Credentials, SQS)
@@ -234,8 +241,8 @@ Executa bateria de 8 testes contra o ambiente AWS:
 8. Actuator Metrics
 
 **Serviços AWS criados (Free Tier compatível):**
-- ECS Fargate (1 tarefa, 512 CPU / 1024 MB)
-- MongoDB 7.0 (sidecar no ECS)
+- ECS Fargate (2 tasks: App + MongoDB, 512 CPU / 1024 MB cada)
+- MongoDB 7.0 (task separada via Service Discovery)
 - EFS (25GB grátis) — persistência dos dados do MongoDB
 - ALB (HTTP, 750h/mês grátis)
 - SQS + DLQ (1M requests grátis)
@@ -364,7 +371,7 @@ desafiodecdigoita/
 │   ├── main.tf                      # Provider configuration
 │   ├── variables.tf                 # Input variables
 │   ├── vpc.tf                       # VPC + subnets + Internet Gateway
-│   ├── ecs.tf                       # ECS Fargate cluster + service (app + mongodb sidecar)
+│   ├── ecs.tf                       # ECS Fargate cluster + services (app + mongodb tasks)
 │   ├── efs.tf                       # EFS persistent storage for MongoDB
 │   ├── alb.tf                       # Application Load Balancer (HTTP)
 │   ├── ecr.tf                       # ECR repository
@@ -492,7 +499,7 @@ source scripts/env-aws.sh
 
 | Serviço | Uso | Free Tier |
 |---------|-----|-----------|
-| ECS Fargate | Orquestração de containers (1 tarefa, 2 containers) | Pago por uso (~$5/mês) |
+| ECS Fargate | Orquestração de containers (2 tasks: App + MongoDB) | Pago por uso (~$5/mês) |
 | EFS | MongoDB persistente (25GB) | ✅ 25GB grátis |
 | ALB | Load balancer HTTP | ✅ 750h/mês grátis (1º ano) |
 | ECR | Repositório de imagens Docker | ✅ 500MB grátis |
@@ -512,12 +519,13 @@ A aplicação exporta as seguintes métricas para CloudWatch:
 
 | Métrica | Tipo | Descrição |
 |---------|------|-----------|
-| `TransactionsProcessed` | Counter | Total de transações processadas |
-| `TransactionSuccessRate` | Gauge | Taxa de sucesso das transações (%) |
-| `AuthorizationLatency` | Timer | Latência de autorização (segundos) |
-| `CircuitBreakerState` | Gauge | Estado do Circuit Breaker (0=CLOSED, 1=OPEN, 2=HALF_OPEN) |
-| `CircuitBreakerFailureRate` | Gauge | Taxa de falha do Circuit Breaker (%) |
-| `SQSMessagesConsumed` | Counter | Mensagens SQS consumidas |
+| `transaction.total.count` | Counter | Total de transações processadas (dimensões: `type`, `status`) |
+| `sqs.messages.consumed.count` | Counter | Mensagens SQS consumidas |
+| `sqs.messages.failed.count` | Counter | Mensagens SQS com falha |
+| `transaction.authorization.latency.avg` | Timer | Latência média de autorização (segundos) |
+| `transaction.authorization.latency.max` | Timer | Latência máxima de autorização (segundos) |
+| `account.balance.avg.value` | Gauge | Saldo médio das contas (BRL) |
+| `account.total.value` | Gauge | Total de contas ativas |
 
 ### CloudWatch Dashboard
 
@@ -551,31 +559,11 @@ Para facilitar o acesso, foi criado um IAM user `transaction-api_observability_r
 - `CloudWatchReadOnlyAccess` — logs e dashboard
 - `AWSXrayReadOnlyAccess` — traces do X-Ray
 
-**Credenciais (geradas pelo Terraform):**
-```bash
-```
-
-**Como usar:**
-```bash
-# Configurar perfil AWS
-aws configure --profile observability-reader
-# Default region: sa-east-1
-
-# Ver logs
-aws logs tail /ecs/transaction-api --profile observability-reader --region sa-east-1
-
-# Ver dashboard
-open "https://sa-east-1.console.aws.amazon.com/cloudwatch/home?region=sa-east-1#dashboards:name=transaction-api_overview"
-```
-
-> ⚠️ Este IAM user foi criado com `terraform apply -target` e **não** faz parte do `run-aws.sh`. Para recriar:
+> ⚠️ As credenciais do IAM user foram omitidas por segurança. Para recriar:
 > ```bash
 > cd terraform
-> terraform apply -target=aws_iam_user.observability_reader \
->                 -target=aws_iam_user_policy_attachment.observability_reader_cloudwatch \
->                 -target=aws_iam_user_policy_attachment.observability_reader_xray \
->                 -target=aws_iam_access_key.observability_reader \
->                 -var-file="environments/dev.tfvars"
+> terraform output -raw observability_reader_access_key_id
+> terraform output -raw observability_reader_secret_access_key
 > ```
 
 **URLs diretos (requer login AWS Console):**
@@ -645,7 +633,7 @@ Variável de Ambiente (System.getenv) → Secrets Manager → Valor default do a
 | ADR | Decisão | Motivação |
 |-----|---------|-----------|
 | 001 | Kotlin + Spring Boot | Conciseness, null safety, coroutine support |
-| 002 | MongoDB sidecar no ECS + EFS | Free Tier, persistência de dados, sem EC2 |
+| 002 | MongoDB task separada + EFS + Service Discovery | Free Tier, persistência, sem EC2, manutenção isolada |
 | 003 | DDD + Multi-Module | Separation of concerns, testability |
 | 004 | Resilience4j | Industry standard, lightweight |
 | 005 | TestContainers | Reliable integration tests |
@@ -655,7 +643,7 @@ Variável de Ambiente (System.getenv) → Secrets Manager → Valor default do a
 | 009 | CloudWatch Metrics | Monitoramento nativo AWS |
 | 010 | X-Ray | Tracing distribuído |
 | 011 | ALB (HTTP only) | Free Tier eligible, sem necessidade de domínio |
-| 012 | URI do MongoDB via localhost | MongoDB roda como sidecar no mesmo task do ECS |
+| 012 | URI do MongoDB via Service Discovery (mongodb.transaction-api.internal) | MongoDB em task separada, comunicação via DNS |
 
 ---
 

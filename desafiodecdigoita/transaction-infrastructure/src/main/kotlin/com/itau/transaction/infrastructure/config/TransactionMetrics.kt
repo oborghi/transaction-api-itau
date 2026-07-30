@@ -98,5 +98,14 @@ class TransactionMetrics(
         }
             .description("Total number of registered accounts")
             .register(meterRegistry)
+
+        // Eagerly register counters so they appear in CloudWatch even before first use
+        Counter.builder("sqs.messages.consumed")
+            .description("Total SQS messages consumed")
+            .register(meterRegistry)
+
+        Counter.builder("sqs.messages.failed")
+            .description("Total SQS messages that failed")
+            .register(meterRegistry)
     }
 }

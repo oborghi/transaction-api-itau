@@ -109,20 +109,21 @@ resource "aws_cloudwatch_dashboard" "overview" {
       },
       # ──────────────────────────────────────
       # Linha 2: Custom Metrics (Micrometer → TransactionAPI namespace)
-      # Custom metrics don't need dimensions - they use the default dimension
+      # Micrometer adds suffixes: .count, .value, .sum, .avg, .max
       # ──────────────────────────────────────
       {
         type = "metric"
         properties = {
           metrics = [
-            ["TransactionAPI", "transaction.total"],
-            [".", "sqs.messages.consumed"],
-            [".", "sqs.messages.failed"],
-            [".", "transaction.authorization.latency.max"],
-            [".", "account.balance.avg"]
+            ["TransactionAPI", "transaction.total.count", "type", "CREDIT", "status", "SUCCEEDED", { stat = "Sum", label = "Total Transactions" }],
+            [".", "sqs.messages.consumed.count", { stat = "Sum", label = "SQS Messages Consumed" }],
+            [".", "sqs.messages.failed.count", { stat = "Sum", label = "SQS Messages Failed" }],
+            [".", "transaction.authorization.latency.avg", { stat = "Average", label = "Avg Latency (s)" }],
+            [".", "transaction.authorization.latency.max", { stat = "Maximum", label = "Max Latency (s)" }],
+            [".", "account.balance.avg.value", { stat = "Average", label = "Avg Balance (BRL)" }],
+            [".", "account.total.value", { stat = "Average", label = "Active Accounts" }]
           ]
           period = 300
-          stat   = "Sum"
           region = var.aws_region
           title  = "Transaction API - Business Metrics"
           width  = 12
