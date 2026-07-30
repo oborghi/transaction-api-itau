@@ -53,13 +53,29 @@ resource "aws_cloudwatch_dashboard" "overview" {
 
   dashboard_body = jsonencode({
     widgets = [
-      # Linha 1: ECS CPU & Memory
+      # ──────────────────────────────────────
+      # Linha 1: ECS CPU & Memory Utilization
+      # ──────────────────────────────────────
       {
         type = "metric"
         properties = {
           metrics = [
-            ["AWS/ECS", "CPUUtilization", { stat = "Average", label = "CPU %" }],
-            [".", "MemoryUtilization", { stat = "Average", label = "Memory %" }]
+            [
+              "AWS/ECS",
+              "CPUUtilization",
+              "ClusterName",
+              aws_ecs_cluster.main.name,
+              "ServiceName",
+              aws_ecs_service.app.name
+            ],
+            [
+              "AWS/ECS",
+              "MemoryUtilization",
+              "ClusterName",
+              aws_ecs_cluster.main.name,
+              "ServiceName",
+              aws_ecs_service.app.name
+            ]
           ]
           period = 300
           stat   = "Average"
@@ -69,12 +85,19 @@ resource "aws_cloudwatch_dashboard" "overview" {
           height = 6
         }
       },
+      # ──────────────────────────────────────
       # Linha 1: ALB Request Count
+      # ──────────────────────────────────────
       {
         type = "metric"
         properties = {
           metrics = [
-            ["AWS/ApplicationELB", "RequestCount", { stat = "Sum", label = "Requests" }]
+            [
+              "AWS/ApplicationELB",
+              "RequestCount",
+              "LoadBalancer",
+              aws_lb.main.arn_suffix
+            ]
           ]
           period = 300
           stat   = "Sum"
@@ -84,14 +107,19 @@ resource "aws_cloudwatch_dashboard" "overview" {
           height = 6
         }
       },
-      # Linha 2: Custom Metrics (TransactionAPI)
+      # ──────────────────────────────────────
+      # Linha 2: Custom Metrics (Micrometer → TransactionAPI namespace)
+      # Custom metrics don't need dimensions - they use the default dimension
+      # ──────────────────────────────────────
       {
         type = "metric"
         properties = {
           metrics = [
-            ["TransactionAPI", "TransactionsProcessed", { stat = "Sum", label = "Transactions" }],
-            [".", "TransactionSuccessRate", { stat = "Average", label = "Success Rate %" }],
-            [".", "AuthorizationLatency", { stat = "Average", label = "Latency (s)" }]
+            ["TransactionAPI", "transaction.total"],
+            [".", "sqs.messages.consumed"],
+            [".", "sqs.messages.failed"],
+            [".", "transaction.authorization.latency.max"],
+            [".", "account.balance.avg"]
           ]
           period = 300
           stat   = "Sum"
@@ -101,14 +129,31 @@ resource "aws_cloudwatch_dashboard" "overview" {
           height = 6
         }
       },
-      # Linha 2: SQS Queue Metrics
+      # ──────────────────────────────────────
+      # Linha 2: SQS Queue - Messages
+      # ──────────────────────────────────────
       {
         type = "metric"
         properties = {
           metrics = [
-            ["AWS/SQS", "ApproximateNumberOfMessagesVisible", { stat = "Average", label = "Visible" }],
-            [".", "ApproximateNumberOfMessagesNotVisible", { stat = "Average", label = "In Flight" }],
-            [".", "NumberOfMessagesDeleted", { stat = "Sum", label = "Deleted" }]
+            [
+              "AWS/SQS",
+              "ApproximateNumberOfMessagesVisible",
+              "QueueName",
+              aws_sqs_queue.main.name
+            ],
+            [
+              "AWS/SQS",
+              "ApproximateNumberOfMessagesNotVisible",
+              "QueueName",
+              aws_sqs_queue.main.name
+            ],
+            [
+              "AWS/SQS",
+              "NumberOfMessagesDeleted",
+              "QueueName",
+              aws_sqs_queue.main.name
+            ]
           ]
           period = 300
           stat   = "Average"
@@ -118,22 +163,26 @@ resource "aws_cloudwatch_dashboard" "overview" {
           height = 6
         }
       },
+      # ──────────────────────────────────────
       # Linha 3: Application Logs
+      # ──────────────────────────────────────
       {
         type = "log"
         properties = {
-          query  = "SOURCE '/ecs/${var.app_name}' | fields @timestamp, @message\n| sort @timestamp desc\n| limit 50"
+          query  = "SOURCE '/ecs/${var.app_name}' | fields @timestamp, @message | sort @timestamp desc | limit 50"
           region = var.aws_region
-          title  = "📋 Application Logs (last 50)"
+          title  = "Application Logs (last 50)"
           width  = 24
           height = 12
         }
       },
-      # Linha 4: X-Ray Traces (quick link + info)
+      # ──────────────────────────────────────
+      # Linha 4: X-Ray Traces
+      # ──────────────────────────────────────
       {
         type = "text"
         properties = {
-          markdown = "## 🚀 X-Ray Distributed Tracing\n\n### Spans disponíveis:\n- `transaction.authorize` - Autorização de transação\n- `mongodb.query` - Consultas MongoDB\n- `sqs.consume` - Consumo de mensagens SQS\n- `http.server.request` - Requisições HTTP\n\n### Links:\n- [X-Ray Console](https://${var.aws_region}.console.aws.amazon.com/xray/home?region=${var.aws_region}#/traces)\n- [Service Map](https://${var.aws_region}.console.aws.amazon.com/xray/home?region=${var.aws_region}#/service-map)"
+          markdown = "## X-Ray Distributed Tracing\n\n### Spans disponiveis:\n- `transaction.authorize` - Autorizacao de transacao\n- `mongodb.query` - Consultas MongoDB\n- `sqs.consume` - Consumo de mensagens SQS\n- `http.server.request` - Requisicoes HTTP\n\n### Links:\n- [X-Ray Console](https://${var.aws_region}.console.aws.amazon.com/xray/home?region=${var.aws_region}#/traces)\n- [Service Map](https://${var.aws_region}.console.aws.amazon.com/xray/home?region=${var.aws_region}#/service-map)"
           width  = 24
           height = 6
         }
