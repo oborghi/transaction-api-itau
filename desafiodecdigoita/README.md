@@ -1,9 +1,9 @@
 # 🏦 Transaction API - Autorização de Transações Financeiras
 
-[![CI Pipeline](https://github.com/ocborghi/desafiodecdigoita/actions/workflows/ci.yml/badge.svg)](https://github.com/ocborghi/desafiodecdigoita/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-≥80%25-brightgreen)]()
+[ ![CI Pipeline](https://github.com/ocborghi/desafiodecdigoita/actions/workflows/ci.yml/badge.svg)](https://github.com/ocborghi/desafiodecdigoita/actions/workflows/ci.yml)
+[ ![Coverage](https://img.shields.io/badge/coverage-%E2%89%A580%25-brightgreen)]()
 
-API REST para autorização de transações financeiras, construída com **Kotlin + Spring Boot 3.3**, seguindo arquitetura **Domain Driven Design (DDD)** com padrões de resiliência (Circuit Breaker, DLQ, Retry).
+API REST para autorização de transações financeiras, construída com **Kotlin + Spring Boot 3.3**, seguindo arquitetura **Domain Driven Design (DDD)** com padrões de resiliência (Circuit Breaker, Dead Letter Queue, Retry).
 
 ## 📋 Table of Contents
 
@@ -12,7 +12,6 @@ API REST para autorização de transações financeiras, construída com **Kotli
 - [Visão Geral](#visão-geral)
 - [Arquitetura](#arquitetura)
 - [Scripts de Execução](#scripts-de-execução)
-- [Scripts de Apoio](#scripts-de-apoio)
 - [Endpoints da API](#endpoints-da-api)
 - [Estrutura do Projeto](#estrutura-do-projeto)
 - [Padrões de Resiliência](#padrões-de-resiliência)
@@ -45,27 +44,15 @@ API REST para autorização de transações financeiras, construída com **Kotli
 ### Ferramentas Obrigatórias
 
 | Ferramenta | Versão Mínima | Comando de Verificação | Instalação (Ubuntu/Debian) |
-|-----------|---------------|----------------------|---------------------------|
+|------------|---------------|----------------------|---------------------------|
 | **Docker** | 24+ | `docker --version` | [docs.docker.com/engine/install](https://docs.docker.com/engine/install/) |
 | **Docker Compose** | v2+ | `docker compose version` | Incluído com Docker Desktop |
 | **Java JDK** | 21+ | `java -version` | `sudo apt install openjdk-21-jdk` |
 | **Maven** | 3.9+ | `mvn -version` | `sudo apt install maven` |
-| **AWS CLI** | 2+ | `aws --version` | [docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) |
+| **AWS CLI** | 2+ | `aws --version` | [docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html](https://docs.aws.amazon.com/cli/latest/userguide/getting-started/install.html) |
 | **curl** | Qualquer | `curl --version` | `sudo apt install curl` |
 | **jq** | Qualquer | `jq --version` | `sudo apt install jq` |
 | **GNU coreutils** | Qualquer | `uuidgen --version` | `sudo apt install uuid-runtime` (para `uuidgen`) |
-
-### Pacotes Linux (Ubuntu/Debian)
-
-```bash
-# Instalar todas as dependências de uma vez
-sudo apt update && sudo apt install -y \
-  docker.io docker-compose-v2 \
-  openjdk-21-jdk \
-  maven \
-  curl jq \
-  uuid-runtime
-```
 
 ### Verificação Rápida
 
@@ -86,6 +73,8 @@ Sistema de autorização de transações financeiras que:
 1. **Registra contas** recebendo mensagens de uma fila SQS (abertura de contas)
 2. **Autoriza transações** (crédito/débito) via REST API
 3. **Garante resiliência** com Circuit Breaker, Dead Letter Queue e Retry
+4. **Configuração via Secrets Manager** — credenciais e URIs são carregadas do AWS Secrets Manager (ou LocalStack)
+5. **Arquitetura full AWS** — DocumentDB (MongoDB compatível), SQS, CloudWatch, X-Ray, S3
 
 ---
 
@@ -95,28 +84,47 @@ Sistema de autorização de transações financeiras que:
 graph TB
     subgraph "Application"
         API["Transaction API<br/>Spring Boot + Kotlin"]
+        SM["SecretsManagerLoader<br/>EnvironmentPostProcessor"]
     end
 
     subgraph "AWS Services"
         SQS["SQS Queue<br/>conta-bancaria-criada"]
         DLQ["SQS DLQ"]
         DocumentDB[("DocumentDB<br/>(MongoDB Compatible)")]
+        CloudWatch[("CloudWatch<br/>Metrics + Logs")]
+        SecretsManager[("Secrets Manager<br/>MongoDB, JWT, SQS, Credentials")]
     end
 
     subgraph "Observability"
-        Prometheus["Prometheus"]
-        Grafana["Grafana"]
-        Jaeger["Jaeger"]
+        CloudWatchG[("CloudWatch<br/>Grafana Dashboards")]
+        XRay[("X-Ray<br/>Distributed Tracing")]
     end
 
     Client["👤 Cliente"] -->|"POST /api/v1/transactions/{id}"| API
     API --> SQS
     SQS -.->|"maxReceiveCount=5"| DLQ
     API --> DocumentDB
-    API --> Prometheus
-    Prometheus --> Grafana
-    API --> Jaeger
+    API --> CloudWatch
+    CloudWatch --> CloudWatchG
+    API --> XRay
+    API -.->|"lê secrets<br/>no startup"| SecretsManager
+    SM -.->|"injeta propriedades<br/>no Environment"| API
 ```
+
+### Como a URI do MongoDB é resolvida
+
+A aplicação nunca define a URI do MongoDB no `application.yml`. A resolução segue esta ordem:
+
+1. **Variável de ambiente** `SPRING_DATA_MONGODB_URI` — se definida, é usada diretamente
+2. **AWS Secrets Manager** — se `AWS_SECRETS_ENABLED=true`, o `SecretsManagerLoader` carrega o secret `transaction-api/mongodb` e extrai a URI
+
+| Ambiente | Fonte | URI Resultante |
+|----------|-------|----------------|
+| **Local** (`run-local.sh`) | `env-local.sh` → `SPRING_DATA_MONGODB_URI` | `mongodb://admin:admin123@localhost:27017/transaction_db?authSource=admin` |
+| **Docker** (`run-docker.sh`) | `docker-compose.yml` → `SPRING_DATA_MONGODB_URI` | `mongodb://admin:admin123@mongodb:27017/transaction_db?authSource=admin` |
+| **AWS** (produção) | Secrets Manager → `transaction-api/mongodb` | Definido no secret da AWS |
+
+**Observação:** O `SecretsManagerLoader` verifica primeiro se a variável de ambiente já existe (`System.getenv`). Se sim, o valor do secret é ignorado. Isso permite que ambientes locais/Docker sobrescrevam a URI sem precisar modificar o secret.
 
 ---
 
@@ -132,15 +140,45 @@ Para todos os serviços do projeto: containers Docker e aplicação Java (se est
 
 | Ação | Descrição |
 |------|-----------|
-| Mata processos Java | Para a aplicação Transaction API (profile local) |
+| Mata processos Java | Para a aplicação Transaction API |
 | Para containers | `docker compose down -v` (remove containers e volumes) |
 | Idempotente | Pode ser chamado várias vezes sem efeitos colaterais |
 
 ---
 
-### `run-docker.sh` — Ambiente Docker Completo (Recomendado)
+### `run-local.sh` — Ambiente Local (Desenvolvimento Rápido)
 
-Roda **tudo** em containers Docker: API, MongoDB, LocalStack (SQS), Vault, Consul, Prometheus, Jaeger, Loki, Grafana.
+Roda a infraestrutura (LocalStack + MongoDB) em containers Docker e a aplicação Java diretamente na máquina host.
+
+```bash
+./scripts/run-local.sh
+```
+
+| Etapa | Descrição |
+|-------|-----------|
+| 1. Pré-requisitos | Carrega `scripts/env-local.sh` com variáveis de ambiente |
+| 2. stop-all | Para serviços anteriores |
+| 3. Infraestrutura | Sobe MongoDB + LocalStack via Docker |
+| 4. Init LocalStack | Executa `init-localstack.sh` (cria SQS, S3, Secrets Manager) |
+| 5. Build | Compila a aplicação com Maven |
+| 6. App | Roda a Transaction API com `java -cp` |
+
+**Pré-requisitos:** Docker, Java 21+, Maven
+
+**Variáveis de ambiente** (definidas em `scripts/env-local.sh`):
+| Variável | Valor | Descrição |
+|----------|-------|-----------|
+| `MONGODB_HOST` | `localhost` | Host do MongoDB (LocalStack) |
+| `SPRING_DATA_MONGODB_URI` | `mongodb://admin:admin123@localhost:27017/...` | URI do MongoDB |
+| `AWS_ENDPOINT_URL` | `http://localhost:4566` | Endpoint LocalStack |
+| `AWS_SECRETS_ENABLED` | `true` | Habilita Secrets Manager |
+| `CLOUDWATCH_ENABLED` | `true` | Habilita CloudWatch Metrics |
+
+---
+
+### `run-docker.sh` — Ambiente Docker Completo
+
+Roda **tudo** em containers Docker: aplicação, MongoDB e LocalStack (SQS, Secrets Manager, CloudWatch, X-Ray).
 
 ```bash
 ./scripts/run-docker.sh
@@ -149,51 +187,22 @@ Roda **tudo** em containers Docker: API, MongoDB, LocalStack (SQS), Vault, Consu
 | Etapa | Descrição |
 |-------|-----------|
 | 1. Pré-requisitos | Verifica se Docker está rodando |
-| 2. stop-all | Para serviços anteriores automaticamente |
-| 3. Infraestrutura | Sobe Vault, MongoDB, LocalStack, Consul |
-| 4. Vault | Aguarda Vault ficar saudável |
-| 5. SQS | Cria filas `conta-bancaria-criada` e DLQ |
-| 6. Vault Secrets | Popula secrets (MongoDB, JWT, AWS, Credentials) |
-| 7. Consul Config | Popula configs centralizadas |
-| 8. App + Observability | Sobe API + Prometheus + Jaeger + Loki + Grafana |
-| 9. Dashboards | Carrega dashboards do Grafana automaticamente |
+| 2. stop-all | Para serviços anteriores |
+| 3. Infraestrutura | Sobe MongoDB + LocalStack via Docker |
+| 4. SQS | Cria filas `conta-bancaria-criada` e DLQ |
+| 5. Secrets Manager | Popula secrets (MongoDB, JWT, SQS, Credentials) |
+| 6. Docker build | Constrói a imagem Docker da aplicação |
+| 7. App | Sobe o container `transaction-api` |
 
 **Pré-requisitos:** Docker
 
----
-
-### `run-local.sh` — API via Java + Infra via Docker
-
-Roda a API via Java localmente (com hot-reload), infraestrutura + observabilidade via Docker.
-
-```bash
-./scripts/run-local.sh
-
-# Para parar: Ctrl+C (cleanup automático via trap)
-```
-
-| Etapa | Descrição |
-|-------|-----------|
-| 1. Pré-requisitos | Verifica Docker, Java 21+, Maven 3.9+ |
-| 2. stop-all | Para serviços anteriores automaticamente |
-| 3. Infraestrutura | Sobe todos os containers Docker |
-| 4. Vault | Aguarda Vault ficar saudável |
-| 5. SQS | Cria filas no LocalStack |
-| 6. Vault Secrets | Popula secrets |
-| 7. Consul Config | Popula configs centralizadas |
-| 8. Maven Build | Compila a aplicação (`mvn clean package`) |
-| 9. Java Start | Inicia a aplicação via `java -cp` (profile local) |
-| 10. Dashboards | Carrega dashboards do Grafana automaticamente |
-
-**Pré-requisitos:** Docker + Java 21+ + Maven 3.9+
-
-**Cleanup automático:** O script captura `SIGINT`/`SIGTERM`/`EXIT` via `trap` e para tanto a aplicação Java quanto os containers Docker.
+**Nota:** A URI do MongoDB é definida diretamente no `docker-compose.yml` como variável de ambiente `SPRING_DATA_MONGODB_URI`, apontando para o container `mongodb`.
 
 ---
 
 ### `run-aws.sh` — Deploy na AWS via Terraform
 
-Faz deploy da infraestrutura e aplicação na AWS utilizando Terraform.
+Faz deploy da infraestrutura e aplicação na AWS utilizando Terraform com EKS (Kubernetes).
 
 ```bash
 # Deploy interativo (com confirmação)
@@ -204,7 +213,7 @@ ENVIRONMENT=staging AUTO_APPROVE=true ./scripts/run-aws.sh
 ```
 
 | Variável de Ambiente | Valor Padrão | Descrição |
-|---------------------|-------------|-----------|
+|---------------------|--------------|-----------|
 | `ENVIRONMENT` | `dev` | Ambiente: `dev` ou `staging` |
 | `AUTO_APPROVE` | `false` | Se `true`, pula confirmação (CI/CD) |
 | `AWS_REGION` | `sa-east-1` | Região AWS |
@@ -212,33 +221,46 @@ ENVIRONMENT=staging AUTO_APPROVE=true ./scripts/run-aws.sh
 **Pré-requisitos:** AWS CLI configurado + credenciais AWS + Terraform
 
 **Serviços AWS criados:**
-- ECS Fargate (orquestração)
+- EKS (Kubernetes)
 - ECR (repositório de imagens)
 - DocumentDB (MongoDB compatível)
 - SQS + DLQ
 - ALB (load balancer)
-- VPC + Subnets + NAT Gateway
-- IAM Roles + CloudWatch Logs
+- VPC + Subnets
+- IAM Roles + CloudWatch Logs + CloudWatch Metrics
+- Secrets Manager (credenciais)
+- X-Ray (tracing distribuído)
 
 ---
 
 ## Scripts de Apoio
 
-| Script | Descrição | Uso |
-|--------|-----------|-----|
-| `stop-all.sh` | Para todos os serviços (Java + Docker) | `./scripts/stop-all.sh` |
-| `run-docker.sh` | Roda ambiente Docker completo | `./scripts/run-docker.sh` |
-| `run-local.sh` | Roda API via Java + infra via Docker | `./scripts/run-local.sh` |
-| `run-aws.sh` | Deploy na AWS via Terraform | `./scripts/run-aws.sh` |
-| `build.sh` | Build completo (`mvn clean package`) | `./scripts/build.sh` |
-| `test.sh` | Roda todos os testes (unit + integration) | `./scripts/test.sh` |
-| `test-unit.sh` | Apenas testes unitários | `./scripts/test-unit.sh` |
-| `test-integration.sh` | Apenas testes de integração (TestContainers) | `./scripts/test-integration.sh` |
-| `coverage.sh` | Gera relatório de cobertura (≥80%) | `./scripts/coverage.sh` |
-| `seed-accounts.sh` | Popula SQS com 10 contas de teste | `./scripts/seed-accounts.sh` |
-| `check-queue.sh` | Verifica mensagens na fila SQS | `./scripts/check-queue.sh` |
-| `seed-secrets.sh` | Popula Vault com secrets | `./scripts/seed-secrets.sh` |
-| `seed-consul.sh` | Popula Consul com configs | `./scripts/seed-consul.sh` |
+### `init-localstack.sh` — Inicialização do LocalStack
+
+Cria os recursos necessários no LocalStack: filas SQS, bucket S3 e secrets no Secrets Manager.
+
+```bash
+# Modo local (fora do container)
+./scripts/init-localstack.sh
+
+# Modo Docker (dentro do container, usa awslocal)
+./scripts/init-localstack.sh --docker
+```
+
+O script aceita a variável `MONGODB_HOST` para configurar o host do MongoDB no secret:
+```bash
+MONGODB_HOST=localhost ./scripts/init-localstack.sh
+```
+
+### `env-local.sh` / `env-docker.sh` — Variáveis de Ambiente
+
+Scripts para carregar configurações de ambiente:
+
+```bash
+source scripts/env-local.sh   # Desenvolvimento local
+source scripts/env-docker.sh  # Docker Compose
+source scripts/env-aws.sh     # Produção AWS
+```
 
 ---
 
@@ -251,7 +273,7 @@ ENVIRONMENT=staging AUTO_APPROVE=true ./scripts/run-aws.sh
 | `POST` | `/api/v1/auth/token` | Gerar token JWT |
 | `POST` | `/api/v1/transactions/{transactionId}` | Autorizar transação |
 | `GET` | `/actuator/health` | Health check |
-| `GET` | `/actuator/prometheus` | Métricas Prometheus |
+| `GET` | `/actuator/metrics` | Métricas da aplicação |
 
 ### Gerar Token de Autenticação
 
@@ -317,10 +339,8 @@ curl -X POST http://localhost:8080/api/v1/transactions/$(cat /proc/sys/kernel/ra
 |---------|-------------|
 | **API Client** | `client_id: transaction-api-client` / `client_secret: super-secret-key-123` |
 | **API Readonly** | `client_id: transaction-api-readonly` / `client_secret: super-secret-key-123` |
-| **Grafana** | `admin` / `admin123` |
-| **Vault** | Token: `root-token` |
-| **MongoDB** | `admin` / `admin123` |
-| **AWS (LocalStack)** | `test` / `test` |
+| **MongoDB/ DocumentDB** | `admin` / `admin123` |
+| **AWS (LocalStack)** | `access_key: test` / `secret_key: test` |
 
 ### URLs de Acesso
 
@@ -329,15 +349,7 @@ curl -X POST http://localhost:8080/api/v1/transactions/$(cat /proc/sys/kernel/ra
 | **API** | http://localhost:8080 | Transaction API |
 | **Swagger UI** | http://localhost:8080/swagger-ui.html | Documentação interativa |
 | **Health Check** | http://localhost:8080/actuator/health | Status da aplicação |
-| **Prometheus Metrics** | http://localhost:8080/actuator/prometheus | Métricas em formato Prometheus |
-| **Grafana** | http://localhost:3000 | Dashboards (admin/admin123) |
-| **Prometheus** | http://localhost:9090 | Consulta de métricas |
-| **Jaeger** | http://localhost:16686 | Distributed tracing |
-| **Loki** | http://localhost:3100 | Logs |
-| **Vault** | http://localhost:8200 | Secrets (token: root-token) |
-| **Consul** | http://localhost:8500 | Config management |
-| **MongoDB** | localhost:27017 | Banco de dados |
-| **LocalStack** | http://localhost:4566 | AWS services (SQS) |
+| **LocalStack** | http://localhost:4566 | AWS services (SQS, Secrets Manager, CloudWatch, S3) |
 
 ---
 
@@ -346,17 +358,27 @@ curl -X POST http://localhost:8080/api/v1/transactions/$(cat /proc/sys/kernel/ra
 ```
 desafiodecdigoita/
 ├── pom.xml                          # Parent POM (multi-module)
-├── docker-compose.yml               # Local environment
 ├── Dockerfile                       # Multi-stage Docker build
+├── docker-compose.yml               # Infraestrutura local (MongoDB, LocalStack, App)
 ├── transaction-domain/              # Domain Layer (Core)
 ├── transaction-application/         # Application Layer (Use Cases)
 ├── transaction-infrastructure/      # Infrastructure Layer (Adapters)
-├── transaction-api/                 # API Layer (Controllers)
-├── terraform/                       # Infrastructure as Code
+├── transaction-api/                 # API Layer (Controllers, Config)
+├── terraform/                       # Infrastructure as Code (AWS)
+├── k8s/                             # Kubernetes manifests (EKS)
 ├── .github/workflows/               # CI/CD
 ├── postman/                         # Collections
 ├── scripts/                         # Scripts de Apoio
-├── observability/                   # Configurações de observabilidade
+│   ├── run-local.sh                 # Ambiente local (app na máquina host)
+│   ├── run-docker.sh                # Ambiente Docker completo
+│   ├── run-aws.sh                   # Deploy AWS
+│   ├── init-localstack.sh           # Inicialização do LocalStack
+│   ├── env-local.sh                 # Variáveis de ambiente (local)
+│   ├── env-docker.sh                # Variáveis de ambiente (Docker)
+│   ├── env-aws.sh                   # Variáveis de ambiente (AWS)
+│   ├── seed-accounts.sh             # Popula contas de teste no SQS
+│   ├── seed-secrets.sh              # Popula secrets no AWS (real)
+│   └── stop-all.sh                  # Para todos os serviços
 └── docs/                            # Documentação
 ```
 
@@ -366,8 +388,8 @@ desafiodecdigoita/
 |--------|-----------------|
 | `transaction-domain` | Modelos, Exceções, Ports (interfaces), Domain Services |
 | `transaction-application` | DTOs, Mappers, Use Cases, Consumers |
-| `transaction-infrastructure` | Repositórios, Configurações, Security, Messaging |
-| `transaction-api` | Controllers, Exception Handlers, Configuração Spring Boot |
+| `transaction-infrastructure` | Repositórios, Configurações, Security, Messaging, Resiliência |
+| `transaction-api` | Controllers, Exception Handlers, Configuração Spring Boot, Secrets Manager Loader |
 
 ---
 
@@ -416,53 +438,6 @@ CLOSED → OPEN (failureRate ≥ 50%) → HALF-OPEN (30s) → CLOSED
 | Integração | 2 | TestContainers (MongoDB) |
 | E2E | Postman | Manual |
 
-### Testando com Postman
-
-A collection `postman/TransactionAPI.postman_collection.json` contém todos os endpoints da API. Existem 3 ambientes pré-configurados:
-
-| Ambiente | Arquivo | BASE_URL | Uso |
-|----------|---------|----------|-----|
-| **Local** | `Local.postman_environment.json` | `http://localhost:8080` | Desenvolvimento local (Java direto) |
-| **Docker** | `Docker.postman_environment.json` | `http://localhost:8080` | docker-compose up (porta 8080) |
-| **AWS** | `AWS.postman_environment.json` | URL do ALB | Deploy na AWS |
-
-#### Passo a passo
-
-1. **Importar a collection:**
-   - Postman → **Import** → selecionar `postman/TransactionAPI.postman_collection.json`
-
-2. **Importar o ambiente:**
-   - Postman → **Environments** → **Import** → selecionar o arquivo do ambiente desejado (ex: `Local.postman_environment.json`)
-
-3. **Selecionar o ambiente:**
-   - No canto superior direito do Postman, selecionar o ambiente importado
-
-4. **Obter token de autenticação:**
-   - Abrir a request `🔑 Auth → POST /api/v1/auth/token`
-   - Clicar **Send**
-   - A variável `TOKEN` será preenchida automaticamente via *Tests script*
-
-5. **Popular contas de teste:**
-   - Executar `./scripts/seed-accounts.sh` no terminal
-   - A variável `ACCOUNT_ID` já vem pré-configurada no ambiente
-
-6. **Testar transações:**
-   - Abrir `💰 Transactions → POST /api/v1/transactions/{transactionId}`
-   - Gerar um novo UUID para `transactionId` (o valor pré-configurado usa `{{$guid}}`)
-   - Clicar **Send**
-
-#### Variáveis por Ambiente
-
-| Variável | Local | Docker | AWS |
-|----------|-------|--------|-----|
-| `BASE_URL` | `http://localhost:8080` | `http://localhost:8080` | URL do ALB |
-| `TOKEN` | *(auto via Tests)* | *(auto via Tests)* | *(auto via Tests)* |
-| `ACCOUNT_ID` | `5b19c8b6-...` | `5b19c8b6-...` | `5b19c8b6-...` |
-| `CLIENT_ID` | `transaction-api-client` | `transaction-api-client` | `transaction-api-client` |
-| `CLIENT_SECRET` | `super-secret-key-123` | `super-secret-key-123` | *(via Secrets Manager)* |
-
-> 💡 **Dica:** O token JWT é obtido automaticamente a cada chamada de auth graças ao script de teste no Postman. A variável `TOKEN` é atualizada para todas as requests da collection.
-
 ---
 
 ## Deploy na AWS
@@ -490,14 +465,107 @@ ENVIRONMENT=staging AUTO_APPROVE=true ./scripts/run-aws.sh
 
 | Serviço | Uso |
 |---------|-----|
-| ECS Fargate | Orquestração de containers |
+| EKS | Orquestração de containers (Kubernetes) |
 | ECR | Repositório de imagens Docker |
 | DocumentDB | Banco MongoDB compatível |
 | SQS | Filas de mensagens |
 | ALB | Load balancer |
-| CloudWatch | Logs e alarmes |
+| CloudWatch | Logs, métricas e alarmes |
+| X-Ray | Tracing distribuído |
 | IAM | Permissões |
-| Secrets Manager | Gerenciamento de senhas |
+| Secrets Manager | Gerenciamento de credenciais (MongoDB URI, JWT, SQS, API) |
+
+---
+
+## Observabilidade
+
+### CloudWatch Metrics (AWS)
+
+A aplicação exporta as seguintes métricas para CloudWatch:
+
+| Métrica | Tipo | Descrição |
+|---------|------|-----------|
+| `TransactionsProcessed` | Counter | Total de transações processadas |
+| `TransactionSuccessRate` | Gauge | Taxa de sucesso das transações (%) |
+| `AuthorizationLatency` | Timer | Latência de autorização (segundos) |
+| `CircuitBreakerState` | Gauge | Estado do Circuit Breaker (0=CLOSED, 1=OPEN, 2=HALF_OPEN) |
+| `CircuitBreakerFailureRate` | Gauge | Taxa de falha do Circuit Breaker (%) |
+| `SQSMessagesConsumed` | Counter | Mensagens SQS consumidas |
+
+### X-Ray Distributed Tracing
+
+A aplicação gera spans de execução para rastreamento distribuído:
+
+| Span | Descrição |
+|------|-----------|
+| `transaction.authorize` | Autorização de transação |
+| `mongodb.query` | Consultas ao banco |
+| `sqs.consume` | Consumo de mensagens SQS |
+| `http.server.request` | Requisições HTTP recebidas |
+| `http.client.request` | Chamadas HTTP externas |
+
+### AWS X-Ray Distributed Tracing
+
+A aplicação utiliza o **AWS X-Ray SDK** para tracing distribuído, funcionando tanto com LocalStack (local) quanto com AWS real.
+
+**Como funciona:**
+- O `AWSXRayServletFilter` intercepta todas as requisições HTTP em `/api/*` e cria traces automaticamente
+- O `XRayConfig` configura o recorder com `NoSamplingStrategy` (100% das requisições tracejadas)
+- Os traces são enviados para o endpoint configurado via `AWS_ENDPOINT_URL`
+
+**LocalStack:** X-Ray é ativado via `SERVICES=xray` e `XRAY_ENABLED=1` no docker-compose
+**AWS:** X-Ray é ativado via IAM policy `AWSXRayDaemonWriteAccess` no EKS node group
+
+### Logs no S3
+
+Os logs da aplicação são enviados para um bucket S3, que pode ser simulado localmente pelo LocalStack:
+
+- **LocalStack**: `s3://transaction-api-logs/{environment}/{service}/{date}/{service}-{timestamp}.log`
+- **AWS**: Bucket S3 real configurado via Terraform
+
+O appender `S3LogAppender` faz buffer dos logs e faz upload em lote a cada 50 eventos, minimizando chamadas à API S3.
+
+Configuração via variáveis de ambiente:
+- `S3_LOG_BUCKET` - Nome do bucket (default: `transaction-api-logs`)
+- `SERVICE_NAME` - Nome do serviço (default: `transaction-api`)
+- `ENVIRONMENT` - Ambiente (default: `local`)
+- `AWS_ENDPOINT_URL` - Endpoint S3 (LocalStack ou AWS)
+
+### Dashboard do CloudWatch
+
+Os dashboards são carregados automaticamente via Terraform:
+- **Transaction API - Overview** - Métricas principais
+- **Transaction API - Circuit Breaker** - Estado do circuit breaker
+- **Transaction API - SQS** - Métricas de filas
+- **Transaction API - Infrastructure** - Métricas de infraestrutura
+
+---
+
+## Secrets Manager — Como as Credenciais São Carregadas
+
+O `SecretsManagerLoader` é um `EnvironmentPostProcessor` do Spring Boot que carrega secrets do AWS Secrets Manager no startup da aplicação.
+
+### Fluxo de Carregamento
+
+1. Verifica se `app.secrets.aws.enabled=true` (ou `AWS_SECRETS_ENABLED=true`)
+2. Conecta ao Secrets Manager (via endpoint configurado em `aws.endpoint-url`)
+3. Para cada secret, verifica se a propriedade já existe como variável de ambiente (`System.getenv`)
+4. Se a variável de ambiente **não** existir, a propriedade é carregada do secret e injetada via `System.setProperty` + `MapPropertySource`
+
+### Secrets Carregados
+
+| Secret | Propriedades | Propósito |
+|--------|-------------|-----------|
+| `transaction-api/mongodb` | `spring.data.mongodb.uri` | URI de conexão com MongoDB/DocumentDB |
+| `transaction-api/jwt` | `app.security.jwt.secret`, `app.security.jwt.issuer` | Chave JWT |
+| `transaction-api/credentials` | `app.security.client.id`, `app.security.client.secret` | Credenciais da API |
+| `transaction-api/sqs` | `aws.endpoint-url`, `aws.region` | Configuração SQS |
+
+### Prioridade de Resolução
+
+```
+Variável de Ambiente (System.getenv) → Secrets Manager → Valor default do application.yml
+```
 
 ---
 
@@ -511,81 +579,24 @@ ENVIRONMENT=staging AUTO_APPROVE=true ./scripts/run-aws.sh
 
 ---
 
-## Observabilidade
-
-### URLs de Acesso
-
-| Serviço | URL | Credenciais | Descrição |
-|---------|-----|-------------|-----------|
-| **Grafana** | http://localhost:3000 | admin / admin123 | Dashboards e métricas |
-| **Prometheus** | http://localhost:9090 | - | Consulta direta de métricas |
-| **Jaeger** | http://localhost:16686 | - | Distributed tracing |
-| **Loki** | http://localhost:3100 | - | Logs estruturados |
-
-### Dashboards Grafana
-
-Ao acessar http://localhost:3000, navegue em **Dashboards** → **Transaction API** para ver os 4 dashboards disponíveis:
-
-| Dashboard | Descrição |
-|-----------|-----------|
-| **Transaction API - Overview** | Taxa de sucesso, latência P50/P90/P95, TPS, Circuit Breaker, SQS |
-| **Transaction API - DLQ Monitoring** | Mensagens recebidas, taxa de reprocessamento, latência |
-| **Transaction API - Infrastructure** | JVM Memory, GC Pause, CPU, HTTP Request Rate |
-| **Transaction API** | Visão geral consolidada |
-
-### Métricas Customizadas
-
-| Métrica | Tipo | Descrição |
-|---------|------|-----------|
-| `transaction_total` | Counter | Total de transações (tags: type, status) |
-| `transaction.authorization.latency` | Timer | Latência de autorização (P50, P90, P95) |
-| `circuitbreaker_state` | Gauge | Estado do Circuit Breaker |
-| `sqs_messages_consumed_total` | Counter | Mensagens SQS consumidas |
-| `dlq_messages_reprocessed_total` | Counter | Mensagens reprocessadas da DLQ |
-
-### Queries Prometheus (Exemplos)
-
-```promql
-# Taxa de sucesso das transações
-rate(transaction_total{status="SUCCEEDED"}[5m]) / rate(transaction_total[5m]) * 100
-
-# Latência P95
-histogram_quantile(0.95, rate(transaction_authorization_latency_seconds_bucket[5m]))
-
-# Estado do Circuit Breaker (0=CLOSED, 1=OPEN, 2=HALF_OPEN)
-resilience4j_circuitbreaker_state
-
-# Uso de memória heap
-jvm_memory_used_bytes{area="heap"}
-```
-
-### Logs com Loki (Grafana → Explore → Loki)
-
-```logql
-# Todos os logs da aplicação
-{container="transaction-api"}
-
-# Apenas logs de erro
-{container="transaction-api"} |= "ERROR"
-
-# Logs de transação
-{container="transaction-api"} |= "transaction" |= "authorize"
-```
-
----
-
 ## Decisões Arquiteturais (ADR)
 
 | ADR | Decisão | Motivação |
 |-----|---------|-----------|
 | 001 | Kotlin + Spring Boot | Conciseness, null safety, coroutine support |
-| 002 | MongoDB (DocumentDB) | Flexible model, AWS compatible |
+| 002 | DocumentDB (MongoDB compatible) | Flexible model, AWS compatible |
 | 003 | DDD + Multi-Module | Separation of concerns, testability |
 | 004 | Resilience4j | Industry standard, lightweight |
 | 005 | TestContainers | Reliable integration tests |
 | 006 | JaCoCo | Integrated coverage enforcement |
-| 007 | ECS Fargate | Serverless containers |
-| 008 | Consul | Centralized config, hotswap |
+| 007 | EKS (Kubernetes) | Container orchestration |
+| 008 | AWS Secrets Manager | Gerenciamento seguro de credenciais |
+| 009 | CloudWatch Metrics | Monitoramento nativo AWS |
+| 010 | X-Ray | Tracing distribuído |
+| 011 | **MongoDB para simular DocumentDB** | LocalStack não possui DocumentDB nativo; usa MongoDB em container separado |
+| 012 | **URI do MongoDB via env var ou Secrets Manager** | `application.yml` não define `spring.data.mongodb.uri`; a resolução é feita por variável de ambiente ou Secrets Manager no startup |
+
+---
 
 ## License
 

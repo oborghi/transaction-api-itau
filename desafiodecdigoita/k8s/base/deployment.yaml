@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transaction-api
+  namespace: transaction-api
+  labels:
+    app.kubernetes.io/name: transaction-api
+    app.kubernetes.io/part-of: transaction-system
+    app.kubernetes.io/version: "1.0.0"
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: transaction-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: transaction-api
+        app.kubernetes.io/part-of: transaction-system
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      serviceAccountName: transaction-api
+      containers:
+        - name: transaction-api
+          image: ${ECR_REGISTRY}/transaction-api:${IMAGE_TAG:-latest}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: transaction-api-config
+          env:
+            # Secrets (AWS Secrets Manager)
+            - name: AWS_SECRETS_ENABLED
+              value: "true"
+            # ==========================================
+            # Observability (X-Ray via OTLP)
+            # ==========================================
+            - name: TRACING_ENABLED
+              value: "true"
+            - name: TRACING_SAMPLING_PROBABILITY
+              value: "1.0"
+            - name: OTLP_ENDPOINT
+              value: "https://xray.${AWS_DEFAULT_REGION}.amazonaws.com"
+            # ==========================================
+            # X-Ray Java Agent
+            # ==========================================
+            - name: JAVA_TOOL_OPTIONS
+              value: "-javaagent:/tmp/opentelemetry-javaagent.jar
+                -Dotel.service.name=transaction-api
+                -Dotel.traces.exporter=otlp
+                -Dotel.exporter.otlp.traces.endpoint=https://xray.sa-east-1.amazonaws.com
+                -Dotel.exporter.otlp.traces.protocol=http/protobuf
+                -Dotel.metrics.exporter=otlp
+                -Dotel.exporter.otlp.metrics.endpoint=https://xray.sa-east-1.amazonaws.com
+                -Dotel.exporter.otlp.metrics.protocol=http/protobuf
+                -Dotel.resource.attributes=service.name=transaction-api,service.namespace=TransactionAPI"
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: "256m"
+              memory: "512Mi"
+            limits:
+              cpu: "512m"
+              memory: "1Gi"
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

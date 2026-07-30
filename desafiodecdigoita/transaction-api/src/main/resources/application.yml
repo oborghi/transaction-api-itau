@@ -1,39 +1,42 @@
 # ==========================================
-# Base Configuration (shared across all profiles)
+# Transaction API - Single Configuration
 # ==========================================
-# Profile-specific configs:
-#   application-local.yml  → Local development (Docker: MongoDB, LocalStack, Vault)
-#   application-docker.yml → Docker Compose environment
-#   application-aws.yml    → AWS production (DocumentDB, SQS, Secrets Manager)
-#   application-test.yml   → Integration tests
+# Toda a configuração é feita via variáveis de ambiente.
+# Não há mais profiles Spring - apenas um arquivo único.
 #
-# Activate via: SPRING_PROFILES_ACTIVE=local|docker|aws|test
+# Scripts de ambiente disponíveis:
+#   source scripts/env-local.sh   → Desenvolvimento local
+#   source scripts/env-docker.sh  → Docker Compose
+#   source scripts/env-aws.sh     → Produção AWS
 # ==========================================
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
 
 spring:
   application:
     name: transaction-api
-  profiles:
-    active: ${SPRING_PROFILES_ACTIVE:local}
   cache:
     type: caffeine
     caffeine:
       spec: maximumSize=1000,expireAfterWrite=24h
     cache-names:
       - jwt-tokens
+  data:
+    mongodb:
+      host: ${MONGODB_HOST:localhost}
 
 # ==========================================
-# AWS (defaults - overridden per profile)
+# AWS Configuration
 # ==========================================
 aws:
   endpoint-url: ${AWS_ENDPOINT_URL:}
   region: ${AWS_DEFAULT_REGION:sa-east-1}
+  access-key-id: ${AWS_ACCESS_KEY_ID:}
+  secret-access-key: ${AWS_SECRET_ACCESS_KEY:}
 
 # ==========================================
-# App Configuration (defaults - overridden per profile)
+# App Configuration
 # ==========================================
 app:
   security:
@@ -62,7 +65,7 @@ app:
       max-batch-size: 10
 
 # ==========================================
-# Resilience4j (shared across all profiles)
+# Resilience4j
 # ==========================================
 resilience4j:
   circuitbreaker:
@@ -98,67 +101,28 @@ resilience4j:
           - com.mongodb.MongoException
 
 # ==========================================
-# Actuator + Tracing (shared across all profiles)
+# Actuator + CloudWatch Metrics
 # ==========================================
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus,metrics
+        include: ${ACTUATOR_EXPOSURE:health,info,metrics}
   endpoint:
     health:
       show-details: always
-  prometheus:
-    metrics:
-      export:
-        enabled: true
-  tracing:
-    sampling:
-      probability: 1.0
+  metrics:
+    export:
+      cloudwatch:
+        enabled: ${CLOUDWATCH_ENABLED:false}
+        namespace: ${CLOUDWATCH_NAMESPACE:TransactionAPI}
+        batch-size: 20
+        step: 30s
 
 # ==========================================
-# Consul (disabled by default, enabled in docker profile)
-# ==========================================
-spring.cloud:
-  consul:
-    host: ${CONSUL_HOST:localhost}
-    port: ${CONSUL_PORT:8500}
-    config:
-      enabled: false
-    discovery:
-      enabled: false
-
-# ==========================================
-# Vault (disabled by default, enabled in docker profile)
-# ==========================================
-spring.cloud.vault:
-  enabled: false
-  host: localhost
-  port: 8200
-  scheme: http
-  authentication: TOKEN
-  token: root-token
-  kv:
-    enabled: true
-    backend: secret
-    default-context: transaction-api
-    application-name: transaction-api
-
-# ==========================================
-# OpenTelemetry (via Micrometer bridge → Jaeger)
-# ==========================================
-otel:
-  service:
-    name: transaction-api
-    version: 1.0.0
-  exporter:
-    otlp:
-      endpoint: http://jaeger:4318
-      protocol: http
-# ==========================================
-# Logging (defaults - overridden per profile)
+# Logging
 # ==========================================
 logging:
   level:
-    com.itau.transaction: INFO
-    org.springframework.data.mongodb: WARN
+    com.itau.transaction: ${LOG_LEVEL:INFO}
+    org.springframework.data.mongodb: ${LOG_LEVEL_MONGODB:WARN}

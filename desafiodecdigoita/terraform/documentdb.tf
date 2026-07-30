@@ -1,5 +1,5 @@
 resource "aws_docdb_cluster" "main" {
-  cluster_identifier     = "${var.project_name}-docdb"
+  cluster_identifier     = "${var.app_name}_docdb"
   master_username        = var.db_master_username
   master_password        = var.db_master_password
   db_subnet_group_name   = aws_docdb_subnet_group.main.name
@@ -7,27 +7,27 @@ resource "aws_docdb_cluster" "main" {
   skip_final_snapshot    = var.environment != "production"
   storage_encrypted      = true
 
-  tags = { Name = "${var.project_name}-docdb" }
+  tags = { Name = "${var.app_name}_docdb" }
 }
 
 resource "aws_docdb_cluster_instance" "main" {
   count              = var.environment == "production" ? 2 : 1
-  identifier         = "${var.project_name}-docdb-${count.index}"
+  identifier         = "${var.app_name}_docdb_${count.index}"
   cluster_identifier = aws_docdb_cluster.main.id
   instance_class     = var.db_instance_class
 
-  tags = { Name = "${var.project_name}-docdb-${count.index}" }
+  tags = { Name = "${var.app_name}_docdb_${count.index}" }
 }
 
 resource "aws_docdb_subnet_group" "main" {
-  name       = "${var.project_name}-docdb-subnet"
+  name       = "${var.app_name}_docdb_subnet"
   subnet_ids = aws_subnet.private_data[*].id
 
-  tags = { Name = "${var.project_name}-docdb-subnet" }
+  tags = { Name = "${var.app_name}_docdb_subnet" }
 }
 
 resource "aws_security_group" "docdb" {
-  name_prefix = "${var.project_name}-docdb-"
+  name_prefix = "${var.app_name}_docdb_"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -44,7 +44,7 @@ resource "aws_security_group" "docdb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = { Name = "${var.project_name}-docdb-sg" }
+  tags = { Name = "${var.app_name}_docdb_sg" }
 
   lifecycle {
     create_before_destroy = true

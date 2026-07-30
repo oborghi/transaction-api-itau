@@ -1,5 +1,5 @@
 resource "aws_ecr_repository" "app" {
-  name                 = var.project_name
+  name                 = var.app_name
   image_tag_mutability = "MUTABLE"
   force_delete         = var.environment != "production"
 
@@ -11,7 +11,7 @@ resource "aws_ecr_repository" "app" {
     encryption_type = "AES256"
   }
 
-  tags = { Name = var.project_name }
+  tags = { Name = var.app_name }
 }
 
 resource "aws_ecr_lifecycle_policy" "app" {

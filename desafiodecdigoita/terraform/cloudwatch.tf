@@ -1,12 +1,12 @@
 resource "aws_cloudwatch_log_group" "app" {
-  name              = "/ecs/${var.project_name}"
+  name              = "/eks/${var.app_name}"
   retention_in_days = 30
 
-  tags = { Name = "${var.project_name}-logs" }
+  tags = { Name = "${var.app_name}_logs" }
 }
 
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
-  alarm_name          = "${var.project_name}-high-cpu"
+  alarm_name          = "${var.app_name}_high_cpu"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
   metric_name         = "CPUUtilization"
@@ -18,15 +18,14 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   alarm_actions       = []
 
   dimensions = {
-    ClusterName = aws_ecs_cluster.main.name
-    ServiceName = aws_ecs_service.app.name
+    ClusterName = aws_eks_cluster.main.name
   }
 
-  tags = { Name = "${var.project_name}-high-cpu" }
+  tags = { Name = "${var.app_name}_high_cpu" }
 }
 
 resource "aws_cloudwatch_metric_alarm" "high_memory" {
-  alarm_name          = "${var.project_name}-high-memory"
+  alarm_name          = "${var.app_name}_high_memory"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
   metric_name         = "MemoryUtilization"
@@ -38,9 +37,8 @@ resource "aws_cloudwatch_metric_alarm" "high_memory" {
   alarm_actions       = []
 
   dimensions = {
-    ClusterName = aws_ecs_cluster.main.name
-    ServiceName = aws_ecs_service.app.name
+    ClusterName = aws_eks_cluster.main.name
   }
 
-  tags = { Name = "${var.project_name}-high-memory" }
+  tags = { Name = "${var.app_name}_high_memory" }
 }

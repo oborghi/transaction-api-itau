@@ -29,12 +29,33 @@ output "ecr_repository_name" {
   value       = aws_ecr_repository.app.name
 }
 
-output "ecs_service_name" {
-  description = "ECS service name"
-  value       = aws_ecs_service.app.name
+# EKS Outputs
+output "eks_cluster_name" {
+  description = "EKS cluster name"
+  value       = aws_eks_cluster.main.name
 }
 
-output "consul_ui_url" {
-  description = "Consul UI URL"
-  value       = "http://${aws_lb.main.dns_name}:8500"
+output "eks_cluster_endpoint" {
+  description = "EKS cluster endpoint"
+  value       = aws_eks_cluster.main.endpoint
+}
+
+output "kubeconfig_command" {
+  description = "Command to configure kubectl"
+  value       = "aws eks update-kubeconfig --region ${var.aws_region} --name ${aws_eks_cluster.main.name}"
+}
+
+output "deploy_command" {
+  description = "Command to deploy the application to EKS"
+  value       = "kubectl apply -k ../k8s/overlays/aws"
+}
+
+output "s3_logs_bucket" {
+  description = "S3 bucket for application logs"
+  value       = aws_s3_bucket.logs.bucket
+}
+
+output "s3_logs_bucket_arn" {
+  description = "S3 bucket ARN for application logs"
+  value       = aws_s3_bucket.logs.arn
 }

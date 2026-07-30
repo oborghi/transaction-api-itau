@@ -13,13 +13,8 @@ import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest
 
 /**
- * Loads secrets from AWS Secrets Manager at startup and injects them as Spring properties.
- * Used in AWS deployment (ECS/EKS) where Vault is not available.
- *
- * AWS Secrets Manager path structure:
- *   transaction-api/mongodb → { "uri": "...", "username": "...", "password": "..." }
- *   transaction-api/jwt → { "secret": "...", "issuer": "..." }
- *   transaction-api/credentials → { "client_id": "...", "client_secret": "..." }
+ * Loads secrets from AWS Secrets Manager at startup and injects them as system properties.
+ * Only sets properties that are NOT already defined as environment variables.
  */
 class SecretsManagerLoader : EnvironmentPostProcessor {
 
@@ -27,10 +22,9 @@ class SecretsManagerLoader : EnvironmentPostProcessor {
     private val objectMapper = ObjectMapper()
 
     override fun postProcessEnvironment(environment: ConfigurableEnvironment, application: SpringApplication) {
-        // Check if AWS Secrets Manager is enabled
         val secretsManagerEnabled = environment.getProperty("app.secrets.aws.enabled", "false")
         if (secretsManagerEnabled != "true") {
-            log.info("AWS Secrets Manager integration disabled. Using Vault or default configuration.")
+            log.info("AWS Secrets Manager integration disabled.")
             return
         }
 
@@ -43,50 +37,71 @@ class SecretsManagerLoader : EnvironmentPostProcessor {
             return
         }
 
-        val secretsManagerClient = SecretsManagerClient.builder()
+        val awsEndpointUrl = environment.getProperty("aws.endpoint-url", "")
+
+        val secretsManagerClientBuilder = SecretsManagerClient.builder()
             .region(Region.of(awsRegion))
             .credentialsProvider(
                 StaticCredentialsProvider.create(
                     AwsBasicCredentials.create(awsAccessKey, awsSecretKey)
                 )
             )
-            .build()
 
+        if (awsEndpointUrl.isNotBlank()) {
+            secretsManagerClientBuilder.endpointOverride(java.net.URI.create(awsEndpointUrl))
+            log.info("Using custom AWS endpoint: $awsEndpointUrl")
+        }
+
+        val secretsManagerClient = secretsManagerClientBuilder.build()
         val secrets = mutableMapOf<String, Any>()
+
+        fun Any?.asString(): String? = this?.toString()
+
+        fun setIfAbsent(key: String, value: String) {
+            // Verifica se já existe variável de ambiente para esta propriedade
+            val envKey = key.replace(".", "_").replace("-", "_").uppercase()
+            if (System.getenv(envKey) != null) {
+                log.info("Skipping '$key' (set via env var \$$envKey)")
+                return
+            }
+            // Verifica se já foi setada como system property
+            if (System.getProperty(key) != null) {
+                log.info("Skipping '$key' (already set as system property)")
+                return
+            }
+            // Seta como system property e também no map do environment
+            System.setProperty(key, value)
+            secrets[key] = value
+            log.info("Set property '$key' from Secrets Manager")
+        }
 
         // Load MongoDB secrets
         loadSecret(secretsManagerClient, "transaction-api/mongodb")?.let { mongoProps ->
-            mongoProps["uri"]?.let { secrets["spring.data.mongodb.uri"] = it }
-            log.info("Loaded MongoDB secret from AWS Secrets Manager")
+            mongoProps["uri"]?.asString()?.let { setIfAbsent("spring.data.mongodb.uri", it) }
         }
 
         // Load JWT secrets
         loadSecret(secretsManagerClient, "transaction-api/jwt")?.let { jwtProps ->
-            jwtProps["secret"]?.let { secrets["app.security.jwt.secret"] = it }
-            jwtProps["issuer"]?.let { secrets["app.security.jwt.issuer"] = it }
-            log.info("Loaded JWT secret from AWS Secrets Manager")
+            jwtProps["secret"]?.asString()?.let { setIfAbsent("app.security.jwt.secret", it) }
+            jwtProps["issuer"]?.asString()?.let { setIfAbsent("app.security.jwt.issuer", it) }
         }
 
         // Load API credentials
         loadSecret(secretsManagerClient, "transaction-api/credentials")?.let { credProps ->
-            credProps["client_id"]?.let { secrets["app.security.client.id"] = it }
-            credProps["client_secret"]?.let { secrets["app.security.client.secret"] = it }
-            log.info("Loaded API credentials from AWS Secrets Manager")
+            credProps["client_id"]?.asString()?.let { setIfAbsent("app.security.client.id", it) }
+            credProps["client_secret"]?.asString()?.let { setIfAbsent("app.security.client.secret", it) }
         }
 
         // Load AWS/SQS secrets
         loadSecret(secretsManagerClient, "transaction-api/sqs")?.let { sqsProps ->
-            sqsProps["endpoint"]?.let { secrets["aws.endpoint-url"] = it }
-            sqsProps["region"]?.let { secrets["aws.region"] = it }
-            sqsProps["access_key"]?.let { secrets["aws.access-key-id"] = it }
-            sqsProps["secret_key"]?.let { secrets["aws.secret-access-key"] = it }
-            log.info("Loaded AWS/SQS secrets from AWS Secrets Manager")
+            sqsProps["endpoint"]?.asString()?.let { setIfAbsent("aws.endpoint-url", it) }
+            sqsProps["region"]?.asString()?.let { setIfAbsent("aws.region", it) }
         }
 
         if (secrets.isNotEmpty()) {
             val propertySource = MapPropertySource("aws-secrets-manager", secrets)
             environment.propertySources.addFirst(propertySource)
-            log.info("Successfully loaded ${secrets.size} properties from AWS Secrets Manager")
+            log.info("Loaded ${secrets.size} properties from AWS Secrets Manager")
         }
 
         secretsManagerClient.close()
@@ -104,7 +119,7 @@ class SecretsManagerLoader : EnvironmentPostProcessor {
 
             objectMapper.readValue(secretString, Map::class.java) as? Map<String, Any>
         } catch (e: Exception) {
-            log.warn("Failed to load secret '$secretName' from AWS Secrets Manager: ${e.message}")
+            log.warn("Failed to load secret '$secretName': ${e.message}")
             null
         }
     }

@@ -4,10 +4,10 @@
 
 # MongoDB Secret
 resource "aws_secretsmanager_secret" "mongodb" {
-  name        = "${var.project_name}/mongodb"
+  name        = "${var.app_name}/mongodb"
   description = "MongoDB connection credentials"
   tags = {
-    Name        = "${var.project_name}-mongodb"
+    Name        = "${var.app_name}_mongodb"
     Environment = var.environment
   }
 }
@@ -23,10 +23,10 @@ resource "aws_secretsmanager_secret_version" "mongodb" {
 
 # JWT Secret
 resource "aws_secretsmanager_secret" "jwt" {
-  name        = "${var.project_name}/jwt"
+  name        = "${var.app_name}/jwt"
   description = "JWT signing key and configuration"
   tags = {
-    Name        = "${var.project_name}-jwt"
+    Name        = "${var.app_name}_jwt"
     Environment = var.environment
   }
 }
@@ -41,10 +41,10 @@ resource "aws_secretsmanager_secret_version" "jwt" {
 
 # API Credentials
 resource "aws_secretsmanager_secret" "credentials" {
-  name        = "${var.project_name}/credentials"
+  name        = "${var.app_name}/credentials"
   description = "API client credentials"
   tags = {
-    Name        = "${var.project_name}-credentials"
+    Name        = "${var.app_name}_credentials"
     Environment = var.environment
   }
 }
@@ -59,10 +59,10 @@ resource "aws_secretsmanager_secret_version" "credentials" {
 
 # SQS Secret (access keys if needed)
 resource "aws_secretsmanager_secret" "sqs" {
-  name        = "${var.project_name}/sqs"
+  name        = "${var.app_name}/sqs"
   description = "SQS configuration"
   tags = {
-    Name        = "${var.project_name}-sqs"
+    Name        = "${var.app_name}_sqs"
     Environment = var.environment
   }
 }
@@ -79,7 +79,7 @@ resource "aws_secretsmanager_secret_version" "sqs" {
 # ==========================================
 
 resource "aws_iam_policy" "secrets_manager_access" {
-  name        = "${var.project_name}-secrets-manager-access"
+  name        = "${var.app_name}_secrets_manager_access"
   description = "Allow ECS tasks to read secrets from Secrets Manager"
 
   policy = jsonencode({
@@ -103,6 +103,6 @@ resource "aws_iam_policy" "secrets_manager_access" {
 }
 
 resource "aws_iam_role_policy_attachment" "secrets_manager_access" {
-  role       = aws_iam_role.ecs_task_role.name
+  role       = aws_iam_role.app_irsa.name
   policy_arn = aws_iam_policy.secrets_manager_access.arn
 }

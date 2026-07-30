@@ -11,7 +11,13 @@ variable "environment" {
 }
 
 variable "project_name" {
-  description = "Project name used for resource naming"
+  description = "Project name used for resource naming (prefixo para todos os recursos)"
+  type        = string
+  default     = "desafiodecdigoita"
+}
+
+variable "app_name" {
+  description = "Application name used for AWS resource naming (padrão: <app_name>_<recurso>)"
   type        = string
   default     = "transaction-api"
 }
@@ -28,30 +34,36 @@ variable "availability_zones" {
   default     = ["sa-east-1a", "sa-east-1b"]
 }
 
-variable "container_image" {
-  description = "Docker image for the API"
+# ==========================================
+# EKS Variables
+# ==========================================
+variable "node_instance_type" {
+  description = "EC2 instance type for EKS node group"
   type        = string
-  default     = "transaction-api:latest"
+  default     = "t3.medium"
 }
 
-variable "container_cpu" {
-  description = "CPU units for the container (1024 = 1 vCPU)"
-  type        = number
-  default     = 512
-}
-
-variable "container_memory" {
-  description = "Memory for the container in MiB"
-  type        = number
-  default     = 1024
-}
-
-variable "desired_count" {
-  description = "Number of ECS tasks to run"
+variable "node_desired_size" {
+  description = "Desired number of nodes in EKS node group"
   type        = number
   default     = 2
 }
 
+variable "node_min_size" {
+  description = "Minimum number of nodes in EKS node group"
+  type        = number
+  default     = 1
+}
+
+variable "node_max_size" {
+  description = "Maximum number of nodes in EKS node group"
+  type        = number
+  default     = 5
+}
+
+# ==========================================
+# DocumentDB Variables
+# ==========================================
 variable "db_instance_class" {
   description = "DocumentDB instance class"
   type        = string
@@ -70,6 +82,9 @@ variable "db_master_password" {
   sensitive   = true
 }
 
+# ==========================================
+# App Variables
+# ==========================================
 variable "jwt_secret" {
   description = "JWT secret for token generation"
   type        = string
@@ -86,4 +101,10 @@ variable "allowed_cidr_blocks" {
   description = "CIDR blocks allowed to access the ALB"
   type        = list(string)
   default     = ["0.0.0.0/0"]
+}
+
+variable "domain_name" {
+  description = "Domain name for the ACM certificate (HTTPS)"
+  type        = string
+  default     = ""
 }

@@ -1,5 +1,5 @@
 resource "aws_security_group" "alb" {
-  name_prefix = "${var.project_name}-alb-"
+  name_prefix = "${var.app_name}_alb_"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -23,7 +23,7 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = { Name = "${var.project_name}-alb-sg" }
+  tags = { Name = "${var.app_name}_alb_sg" }
 
   lifecycle {
     create_before_destroy = true
@@ -31,7 +31,7 @@ resource "aws_security_group" "alb" {
 }
 
 resource "aws_lb" "main" {
-  name               = "${var.project_name}-alb"
+  name               = "${var.app_name}_alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -39,11 +39,11 @@ resource "aws_lb" "main" {
 
   enable_deletion_protection = var.environment == "production"
 
-  tags = { Name = "${var.project_name}-alb" }
+  tags = { Name = "${var.app_name}_alb" }
 }
 
 resource "aws_lb_target_group" "app" {
-  name        = "${var.project_name}-tg"
+  name        = "${var.app_name}_tg"
   port        = 8080
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
@@ -59,7 +59,7 @@ resource "aws_lb_target_group" "app" {
     matcher             = "200"
   }
 
-  tags = { Name = "${var.project_name}-tg" }
+  tags = { Name = "${var.app_name}_tg" }
 }
 
 resource "aws_lb_listener" "http" {
@@ -88,5 +88,22 @@ resource "aws_lb_listener" "https" {
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.app.arn
+  }
+}
+
+# ==========================================
+# ACM Certificate (HTTPS)
+# ==========================================
+resource "aws_acm_certificate" "main" {
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+
+  tags = {
+    Name        = "${var.app_name}_cert"
+    Environment = var.environment
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }

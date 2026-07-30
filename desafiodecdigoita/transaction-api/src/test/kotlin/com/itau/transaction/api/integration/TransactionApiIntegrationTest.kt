@@ -32,7 +32,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
  * - Transaction authorization (CREDIT/DEBIT)
  * - Error scenarios (not found, insufficient balance)
  * - Metrics recording (transaction_total, latency, circuit breaker, SQS, DLQ)
- * - Prometheus endpoint exposure
+ * - CloudWatch metrics exposure
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
@@ -195,16 +195,10 @@ class TransactionApiIntegrationTest {
             .andExpect(jsonPath("$.error").value("ACCOUNT_NOT_FOUND"))
             .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("was not found")))
 
-        // Verify failure metric
-        val prometheusOutput = mockMvc.perform(get("/actuator/prometheus")).andReturn().response.contentAsString
-        // Check for both possible tag formats, as Prometheus might normalize them
-        assertTrue(
-            prometheusOutput.contains("transaction_total{type=\"CREDIT\",status=\"FAILED\"}") ||
-            prometheusOutput.contains("transaction_total{type=\"CREDIT\", status=\"FAILED\"}")
-        )
-
-        // Also verify that the specific failure metric is present
-        assertTrue(prometheusOutput.contains("transaction_total{type=\"CREDIT\",status=\"FAILED\"}"))
+        // Verify failure metric via MeterRegistry
+        val failedCounter = meterRegistry.find("transaction.total")
+            .tags("type", "CREDIT", "status", "FAILED").counter()
+        assertNotNull(failedCounter, "transaction.total FAILED counter should be registered")
     }
 
     @Test

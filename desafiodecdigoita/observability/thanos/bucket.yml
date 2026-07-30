@@ -1,7 +1,0 @@
-type: S3
-config:
-  bucket: "transaction-api-metrics"
-  endpoint: "s3.sa-east-1.amazonaws.com"
-  region: "sa-east-1"
-  sse_config:
-    type: SSE256

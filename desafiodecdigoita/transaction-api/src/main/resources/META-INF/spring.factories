@@ -1,3 +1,2 @@
 org.springframework.boot.env.EnvironmentPostProcessor=\
-  com.itau.transaction.api.config.VaultSecretLoader,\
   com.itau.transaction.api.config.SecretsManagerLoader
