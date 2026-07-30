@@ -3,6 +3,7 @@ package com.itau.transaction.api.controller
 import com.itau.transaction.application.dto.request.TransactionRequest
 import com.itau.transaction.application.dto.response.TransactionAuthorizationResponse
 import com.itau.transaction.application.service.AuthorizeTransactionUseCase
+import com.itau.transaction.infrastructure.config.XRayTracing
 import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -23,7 +24,9 @@ class TransactionController(
     ): ResponseEntity<TransactionAuthorizationResponse> {
         logger.info("POST /api/v1/transactions/{} type={} amount={}", transactionId, request.type, request.amount?.value)
 
-        val response = authorizeTransactionUseCase.execute(transactionId, request)
+        val response = XRayTracing.trace("transaction.authorize") {
+            authorizeTransactionUseCase.execute(transactionId, request)
+        }
         return ResponseEntity.status(HttpStatus.OK).body(response)
     }
 }

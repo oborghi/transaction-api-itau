@@ -1,5 +1,6 @@
 package com.itau.transaction.infrastructure.config
 
+import com.amazonaws.xray.interceptors.TracingInterceptor
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
@@ -7,6 +8,7 @@ import org.springframework.context.annotation.Configuration
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.sqs.SqsClient
 import java.net.URI
@@ -32,6 +34,10 @@ class AwsSqsConfig {
     fun sqsClient(): SqsClient {
         val regionObj = Region.of(region.ifBlank { "sa-east-1" })
 
+        val overrideConfig = ClientOverrideConfiguration.builder()
+            .addExecutionInterceptor(TracingInterceptor())
+            .build()
+
         // Se endpoint URL está configurado (LocalStack), usa StaticCredentialsProvider
         if (!endpointUrl.isNullOrBlank()) {
             log.info("Creating SQS client with endpoint: {}, region: {}", endpointUrl, regionObj)
@@ -44,6 +50,7 @@ class AwsSqsConfig {
             return SqsClient.builder()
                 .endpointOverride(URI.create(endpointUrl))
                 .credentialsProvider(credentials)
+                .overrideConfiguration(overrideConfig)
                 .region(regionObj)
                 .build()
         }
@@ -54,15 +61,17 @@ class AwsSqsConfig {
             val credentials = StaticCredentialsProvider.create(
                 AwsBasicCredentials.create(accessKeyId, secretAccessKey)
             )
-            val builder = SqsClient.builder()
+            return SqsClient.builder()
                 .credentialsProvider(credentials)
+                .overrideConfiguration(overrideConfig)
                 .region(regionObj)
-            return builder.build()
+                .build()
         }
 
         // Caso contrário, usa DefaultCredentialsProvider (IAM role em ECS, etc.)
         log.info("Creating SQS client with DefaultCredentialsProviderChain, region: {}", regionObj)
         return SqsClient.builder()
+            .overrideConfiguration(overrideConfig)
             .region(regionObj)
             .build()
     }

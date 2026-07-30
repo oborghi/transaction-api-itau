@@ -181,10 +181,27 @@ resource "aws_cloudwatch_dashboard" "overview" {
       # Linha 4: X-Ray Traces
       # ──────────────────────────────────────
       {
-        type = "text"
+        type = "xray"
         properties = {
-          markdown = "## X-Ray Distributed Tracing\n\n### Spans disponiveis:\n- `transaction.authorize` - Autorizacao de transacao\n- `mongodb.query` - Consultas MongoDB\n- `sqs.consume` - Consumo de mensagens SQS\n- `http.server.request` - Requisicoes HTTP\n\n### Links:\n- [X-Ray Console](https://${var.aws_region}.console.aws.amazon.com/xray/home?region=${var.aws_region}#/traces)\n- [Service Map](https://${var.aws_region}.console.aws.amazon.com/xray/home?region=${var.aws_region}#/service-map)"
-          width  = 24
+          query = {
+            xray = "service(\"transaction-api\")"
+          }
+          region = var.aws_region
+          title  = "X-Ray Service Map"
+          width  = 12
+          height = 6
+        }
+      },
+      {
+        type = "xray"
+        properties = {
+          query = {
+            xray = "service(\"transaction-api\")"
+          }
+          region = var.aws_region
+          title  = "X-Ray Traces"
+          view   = "list"
+          width  = 12
           height = 6
         }
       }
