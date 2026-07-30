@@ -109,7 +109,6 @@ resource "aws_cloudwatch_dashboard" "overview" {
       },
       # ──────────────────────────────────────
       # Linha 2: Custom Metrics (Micrometer → TransactionAPI namespace)
-      # Micrometer adds suffixes: .count, .value, .sum, .avg, .max
       # ──────────────────────────────────────
       {
         type = "metric"
@@ -175,30 +174,6 @@ resource "aws_cloudwatch_dashboard" "overview" {
           title  = "Application Logs (last 50)"
           width  = 24
           height = 12
-        }
-      },
-      # ──────────────────────────────────────
-      # Linha 4: X-Ray Console Links
-      # ──────────────────────────────────────
-      {
-        type   = "text"
-        width  = 24
-        height = 6
-        properties = {
-          markdown = <<EOF
-## X-Ray Distributed Tracing
-
-| Span | Descricao |
-|------|-----------|
-| `transaction.authorize` | Autorizacao de transacao |
-| `mongodb.query` | Consultas MongoDB |
-| `sqs.consume` | Consumo de mensagens SQS |
-| `http.server.request` | Requisicoes HTTP |
-
-**Links:**
-- [X-Ray Traces](https://${var.aws_region}.console.aws.amazon.com/xray/home?region=${var.aws_region}#/traces)
-- [X-Ray Service Map](https://${var.aws_region}.console.aws.amazon.com/xray/home?region=${var.aws_region}#/service-map)
-EOF
         }
       }
     ]
