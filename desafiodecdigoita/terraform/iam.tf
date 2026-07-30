@@ -1,93 +1,82 @@
 # ==========================================
-# IAM Roles for EKS (cluster e node já estão em eks.tf)
+# IAM Roles for ECS Fargate
 # ==========================================
 
-# IAM Role for EKS Service Account (IRSA) - para a aplicação acessar SQS e Secrets Manager
-resource "aws_iam_role" "app_irsa" {
-  name = "${var.app_name}_app_irsa"
+# ECS Execution Role (pulls images from ECR, writes logs)
+resource "aws_iam_role" "ecs_execution" {
+  name = "${var.app_name}_ecs_execution_role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRoleWithWebIdentity"
+      Action = "sts:AssumeRole"
       Effect = "Allow"
-      Condition = {
-        StringEquals = {
-          "${replace(aws_eks_cluster.main.identity[0].oidc[0].issuer, "https://", "")}:sub" = "system:serviceaccount:transaction-api:transaction-api"
-        }
-      }
       Principal = {
-        Federated = aws_iam_openid_connect_provider.eks.arn
+        Service = "ecs-tasks.amazonaws.com"
       }
     }]
   })
 }
 
-# OIDC Provider para EKS (necessário para IRSA)
-resource "aws_iam_openid_connect_provider" "eks" {
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = [data.tls_certificate.eks.certificates[0].sha1_fingerprint]
-  url             = aws_eks_cluster.main.identity[0].oidc[0].issuer
+resource "aws_iam_role_policy_attachment" "ecs_execution_ecr" {
+  role       = aws_iam_role.ecs_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
-data "tls_certificate" "eks" {
-  url = aws_eks_cluster.main.identity[0].oidc[0].issuer
+resource "aws_iam_role_policy_attachment" "ecs_execution_logs" {
+  role       = aws_iam_role.ecs_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
 }
 
-# Policy para a app acessar SQS, Secrets Manager, S3 e CloudWatch
-resource "aws_iam_role_policy" "app_irsa" {
-  name = "${var.app_name}_app_irsa_policy"
-  role = aws_iam_role.app_irsa.id
+# ECS Task Role (what the application needs)
+resource "aws_iam_role" "ecs_task" {
+  name = "${var.app_name}_ecs_task_role"
 
-  policy = jsonencode({
+  assume_role_policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "sqs:SendMessage",
-          "sqs:ReceiveMessage",
-          "sqs:DeleteMessage",
-          "sqs:GetQueueAttributes",
-          "sqs:GetQueueUrl"
-        ]
-        Resource = [
-          aws_sqs_queue.main.arn,
-          aws_sqs_queue.dlq.arn
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "secretsmanager:GetSecretValue",
-          "secretsmanager:DescribeSecret"
-        ]
-        Resource = [
-          "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.app_name}/*"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "cloudwatch:PutMetricData",
-          "cloudwatch:ListMetrics"
-        ]
-        Resource = ["*"]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:PutObject",
-          "s3:GetObject",
-          "s3:ListBucket"
-        ]
-        Resource = [
-          aws_s3_bucket.logs.arn,
-          "${aws_s3_bucket.logs.arn}/*"
-        ]
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "ecs-tasks.amazonaws.com"
       }
-    ]
+    }]
   })
 }
 
-data "aws_caller_identity" "current" {}
+# SQS Access
+resource "aws_iam_role_policy_attachment" "ecs_task_sqs" {
+  role       = aws_iam_role.ecs_task.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSQSFullAccess"
+}
+
+# Secrets Manager Access
+resource "aws_iam_role_policy_attachment" "ecs_task_secretsmanager" {
+  role       = aws_iam_role.ecs_task.name
+  policy_arn = "arn:aws:iam::aws:policy/SecretsManagerReadWrite"
+}
+
+# CloudWatch Metrics Access
+resource "aws_iam_role_policy_attachment" "ecs_task_cloudwatch" {
+  role       = aws_iam_role.ecs_task.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
+# S3 Access (for logs)
+resource "aws_iam_role_policy_attachment" "ecs_task_s3" {
+  role       = aws_iam_role.ecs_task.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+}
+
+# X-Ray Access
+resource "aws_iam_role_policy_attachment" "ecs_task_xray" {
+  role       = aws_iam_role.ecs_task.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+}
+
+# EFS Access (for MongoDB persistent volume)
+resource "aws_iam_role_policy_attachment" "ecs_task_efs" {
+  role       = aws_iam_role.ecs_task.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonElasticFileSystemClientFullAccess"
+}
+

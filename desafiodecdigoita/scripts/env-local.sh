@@ -24,15 +24,8 @@ export SQS_QUEUE_URL="http://localhost:4566/000000000000/conta-bancaria-criada"
 export SQS_DLQ_URL="http://localhost:4566/000000000000/conta-bancaria-criada-dlq"
 export SQS_POLL_INTERVAL="5000"
 
-# Security (fallback - será sobrescrito pelo Secrets Manager se habilitado)
+# Security (loaded exclusively from AWS Secrets Manager via LocalStack)
 export JWT_EXPIRATION="86400"
-export API_CLIENT_ID="transaction-api-client"
-export API_CLIENT_SECRET="super-secret-key-123"
-export API_READONLY_ID="transaction-api-readonly"
-export API_READONLY_SECRET="super-secret-key-123"
-
-# Secrets Manager (enabled for local - loads from LocalStack)
-export AWS_SECRETS_ENABLED="true"
 
 # CloudWatch (via LocalStack)
 export CLOUDWATCH_ENABLED="true"

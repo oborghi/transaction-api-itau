@@ -2,10 +2,10 @@ package com.itau.transaction.infrastructure.config
 
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.sqs.SqsClient
@@ -16,39 +16,54 @@ class AwsSqsConfig {
 
     private val log = LoggerFactory.getLogger(javaClass)
 
-    @Value("\${aws.endpoint-url:http://localhost:4566}")
+    @Value("\${aws.endpoint-url:}")
     private lateinit var endpointUrl: String
 
     @Value("\${aws.region:sa-east-1}")
     private lateinit var region: String
 
-    @Value("\${aws.access-key-id:test}")
+    @Value("\${aws.access-key-id:}")
     private lateinit var accessKeyId: String
 
-    @Value("\${aws.secret-access-key:test}")
+    @Value("\${aws.secret-access-key:}")
     private lateinit var secretAccessKey: String
 
     @Bean
     fun sqsClient(): SqsClient {
-        if (endpointUrl.isBlank()) {
-            log.warn("AWS endpoint URL is blank, creating SQS client with default endpoint")
+        val regionObj = Region.of(region.ifBlank { "sa-east-1" })
+
+        // Se endpoint URL está configurado (LocalStack), usa StaticCredentialsProvider
+        if (!endpointUrl.isNullOrBlank()) {
+            log.info("Creating SQS client with endpoint: {}, region: {}", endpointUrl, regionObj)
+            val credentials = StaticCredentialsProvider.create(
+                AwsBasicCredentials.create(
+                    accessKeyId.ifBlank { "test" },
+                    secretAccessKey.ifBlank { "test" }
+                )
+            )
+            return SqsClient.builder()
+                .endpointOverride(URI.create(endpointUrl))
+                .credentialsProvider(credentials)
+                .region(regionObj)
+                .build()
+        }
+
+        // Se credenciais explícitas foram fornecidas, usa StaticCredentialsProvider
+        if (!accessKeyId.isNullOrBlank() && !secretAccessKey.isNullOrBlank()) {
+            log.info("Creating SQS client with StaticCredentialsProvider, region: {}", regionObj)
             val credentials = StaticCredentialsProvider.create(
                 AwsBasicCredentials.create(accessKeyId, secretAccessKey)
             )
-            return SqsClient.builder()
+            val builder = SqsClient.builder()
                 .credentialsProvider(credentials)
-                .region(Region.of(region))
-                .build()
+                .region(regionObj)
+            return builder.build()
         }
-        log.info("Creating SQS client with endpoint: {}", endpointUrl)
-        val credentials = StaticCredentialsProvider.create(
-            AwsBasicCredentials.create(accessKeyId, secretAccessKey)
-        )
 
+        // Caso contrário, usa DefaultCredentialsProvider (IAM role em ECS, etc.)
+        log.info("Creating SQS client with DefaultCredentialsProviderChain, region: {}", regionObj)
         return SqsClient.builder()
-            .endpointOverride(URI.create(endpointUrl))
-            .credentialsProvider(credentials)
-            .region(Region.of(region))
+            .region(regionObj)
             .build()
     }
 }

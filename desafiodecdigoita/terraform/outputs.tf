@@ -1,3 +1,7 @@
+# ==========================================
+# Terraform Outputs
+# ==========================================
+
 output "alb_dns_name" {
   description = "DNS name of the Application Load Balancer"
   value       = aws_lb.main.dns_name
@@ -8,10 +12,9 @@ output "ecr_repository_url" {
   value       = aws_ecr_repository.app.repository_url
 }
 
-output "documentdb_endpoint" {
-  description = "DocumentDB cluster endpoint"
-  value       = aws_docdb_cluster.main.endpoint
-  sensitive   = true
+output "ecr_repository_name" {
+  description = "ECR repository name"
+  value       = aws_ecr_repository.app.name
 }
 
 output "sqs_queue_url" {
@@ -24,38 +27,32 @@ output "sqs_dlq_url" {
   value       = aws_sqs_queue.dlq.id
 }
 
-output "ecr_repository_name" {
-  description = "ECR repository name"
-  value       = aws_ecr_repository.app.name
-}
-
-# EKS Outputs
-output "eks_cluster_name" {
-  description = "EKS cluster name"
-  value       = aws_eks_cluster.main.name
-}
-
-output "eks_cluster_endpoint" {
-  description = "EKS cluster endpoint"
-  value       = aws_eks_cluster.main.endpoint
-}
-
-output "kubeconfig_command" {
-  description = "Command to configure kubectl"
-  value       = "aws eks update-kubeconfig --region ${var.aws_region} --name ${aws_eks_cluster.main.name}"
-}
-
-output "deploy_command" {
-  description = "Command to deploy the application to EKS"
-  value       = "kubectl apply -k ../k8s/overlays/aws"
-}
-
 output "s3_logs_bucket" {
   description = "S3 bucket for application logs"
   value       = aws_s3_bucket.logs.bucket
 }
 
-output "s3_logs_bucket_arn" {
-  description = "S3 bucket ARN for application logs"
-  value       = aws_s3_bucket.logs.arn
+output "ecs_cluster_name" {
+  description = "ECS cluster name"
+  value       = aws_ecs_cluster.main.name
+}
+
+output "ecs_service_name" {
+  description = "ECS service name"
+  value       = aws_ecs_service.app.name
+}
+
+output "cloudwatch_log_group" {
+  description = "CloudWatch log group name"
+  value       = aws_cloudwatch_log_group.ecs.name
+}
+
+output "cloudwatch_dashboard" {
+  description = "CloudWatch dashboard name"
+  value       = aws_cloudwatch_dashboard.overview.dashboard_name
+}
+
+output "deploy_command" {
+  description = "Command to force new ECS deployment"
+  value       = "aws ecs update-service --cluster ${aws_ecs_cluster.main.name} --service ${aws_ecs_service.app.name} --force-new-deployment --region ${var.aws_region}"
 }

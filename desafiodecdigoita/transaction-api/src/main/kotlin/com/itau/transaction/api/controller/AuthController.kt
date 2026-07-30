@@ -17,10 +17,10 @@ import java.time.format.DateTimeFormatter
 class AuthController(
     private val jwtTokenProvider: JwtTokenProvider,
 
-    @Value("\${app.security.clients[0].id:transaction-api-client}")
+    @Value("\${app.security.clients[0].id}")
     private val validClientId: String,
 
-    @Value("\${app.security.clients[0].secret:super-secret-key-123}")
+    @Value("\${app.security.clients[0].secret}")
     private val validClientSecret: String
 ) {
 

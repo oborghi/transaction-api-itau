@@ -38,26 +38,27 @@ aws:
 # ==========================================
 # App Configuration
 # ==========================================
+# All security credentials are loaded exclusively from AWS Secrets Manager
+# via SecretsManagerLoader (EnvironmentPostProcessor).
+# No fallback defaults are defined here for security reasons.
+# See: transaction-api/jwt, transaction-api/credentials secrets in AWS/LocalStack
 app:
   security:
     jwt:
-      secret: ${JWT_SECRET:changeme}
+      secret: placeholder-overridden-by-secrets-manager
       expiration: ${JWT_EXPIRATION:86400}
       issuer: transaction-api
     clients:
-      - id: ${API_CLIENT_ID:transaction-api-client}
-        secret: ${API_CLIENT_SECRET:changeme}
+      - id: placeholder-overridden-by-secrets-manager
+        secret: placeholder-overridden-by-secrets-manager
         roles: [ADMIN, API]
-      - id: ${API_READONLY_ID:transaction-api-readonly}
-        secret: ${API_READONLY_SECRET:changeme}
+      - id: placeholder-overridden-by-secrets-manager
+        secret: placeholder-overridden-by-secrets-manager
         roles: [API]
   sqs:
     queue-url: ${SQS_QUEUE_URL:}
     dlq-url: ${SQS_DLQ_URL:}
     poll-interval: ${SQS_POLL_INTERVAL:5000}
-  secrets:
-    aws:
-      enabled: ${AWS_SECRETS_ENABLED:false}
   dlq:
     reprocessor:
       enabled: true

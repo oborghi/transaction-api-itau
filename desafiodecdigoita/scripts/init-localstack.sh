@@ -64,14 +64,14 @@ $AWS_CMD secretsmanager put-secret-value \
     --secret-string "{\"uri\":\"mongodb://admin:admin123@${MONGODB_HOST}:27017/transaction_db?authSource=admin\",\"username\":\"admin\",\"password\":\"admin123\"}"
 echo "   ✅ MongoDB secret"
 
-# JWT secret
+# JWT secret (usando valores reais do dev.tfvars)
 $AWS_CMD secretsmanager create-secret \
     --name transaction-api/jwt \
     --description "JWT signing key and configuration" \
-    --secret-string '{"secret":"MyDefaultSecretKeyForDevelopmentOnly2024!","issuer":"transaction-api"}' 2>/dev/null || \
+    --secret-string '{"secret":"YVvsNRGe05kjPPikSdcXi9eGDAFP2o/r6ocQ1rGLpwU=","issuer":"transaction-api"}' 2>/dev/null || \
 $AWS_CMD secretsmanager put-secret-value \
     --secret-id transaction-api/jwt \
-    --secret-string '{"secret":"MyDefaultSecretKeyForDevelopmentOnly2024!","issuer":"transaction-api"}'
+    --secret-string '{"secret":"YVvsNRGe05kjPPikSdcXi9eGDAFP2o/r6ocQ1rGLpwU=","issuer":"transaction-api"}'
 echo "   ✅ JWT secret"
 
 # AWS/SQS secret
@@ -84,14 +84,14 @@ $AWS_CMD secretsmanager put-secret-value \
     --secret-string '{"region":"sa-east-1","endpoint":"http://localstack:4566"}'
 echo "   ✅ AWS/SQS secret"
 
-# API credentials
+# API credentials (usando valores reais do dev.tfvars)
 $AWS_CMD secretsmanager create-secret \
     --name transaction-api/credentials \
     --description "API client credentials" \
-    --secret-string '{"client_id":"transaction-api-client","client_secret":"super-secret-key-123"}' 2>/dev/null || \
+    --secret-string '{"client_id":"transaction-api-client","client_secret":"AxIp+2lLcgdYV8oVYrC15w=="}' 2>/dev/null || \
 $AWS_CMD secretsmanager put-secret-value \
     --secret-id transaction-api/credentials \
-    --secret-string '{"client_id":"transaction-api-client","client_secret":"super-secret-key-123"}'
+    --secret-string '{"client_id":"transaction-api-client","client_secret":"AxIp+2lLcgdYV8oVYrC15w=="}'
 echo "   ✅ Credentials secret"
 
 echo ""

@@ -22,30 +22,32 @@ class SecretsManagerLoader : EnvironmentPostProcessor {
     private val objectMapper = ObjectMapper()
 
     override fun postProcessEnvironment(environment: ConfigurableEnvironment, application: SpringApplication) {
-        val secretsManagerEnabled = environment.getProperty("app.secrets.aws.enabled", "false")
-        if (secretsManagerEnabled != "true") {
-            log.info("AWS Secrets Manager integration disabled.")
-            return
-        }
-
-        val awsRegion = environment.getProperty("aws.region", "sa-east-1")
-        val awsAccessKey = environment.getProperty("aws.access-key-id", "")
-        val awsSecretKey = environment.getProperty("aws.secret-access-key", "")
-
-        if (awsAccessKey.isBlank() || awsSecretKey.isBlank()) {
-            log.warn("AWS credentials not configured. Skipping AWS Secrets Manager loading.")
-            return
-        }
-
-        val awsEndpointUrl = environment.getProperty("aws.endpoint-url", "")
+        log.info("AWS Secrets Manager integration enabled. Loading secrets...")
+        // Environment variables must be read directly via System.getenv() since
+        // EnvironmentPostProcessor runs before application.yml is fully loaded
+        val awsRegion = System.getenv("AWS_DEFAULT_REGION") ?: "sa-east-1"
+        val awsAccessKey = System.getenv("AWS_ACCESS_KEY_ID") ?: ""
+        val awsSecretKey = System.getenv("AWS_SECRET_ACCESS_KEY") ?: ""
+        val awsEndpointUrl = System.getenv("AWS_ENDPOINT_URL") ?: ""
 
         val secretsManagerClientBuilder = SecretsManagerClient.builder()
             .region(Region.of(awsRegion))
-            .credentialsProvider(
+
+        if (awsAccessKey.isNotBlank() && awsSecretKey.isNotBlank()) {
+            // LocalStack / static credentials mode
+            secretsManagerClientBuilder.credentialsProvider(
                 StaticCredentialsProvider.create(
                     AwsBasicCredentials.create(awsAccessKey, awsSecretKey)
                 )
             )
+            log.info("Using static AWS credentials for Secrets Manager")
+        } else {
+            // AWS ECS mode: use IAM Task Role via DefaultCredentialsProvider
+            secretsManagerClientBuilder.credentialsProvider(
+                software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider.create()
+            )
+            log.info("Using DefaultCredentialsProvider for Secrets Manager (IAM Role)")
+        }
 
         if (awsEndpointUrl.isNotBlank()) {
             secretsManagerClientBuilder.endpointOverride(java.net.URI.create(awsEndpointUrl))
@@ -88,8 +90,8 @@ class SecretsManagerLoader : EnvironmentPostProcessor {
 
         // Load API credentials
         loadSecret(secretsManagerClient, "transaction-api/credentials")?.let { credProps ->
-            credProps["client_id"]?.asString()?.let { setIfAbsent("app.security.client.id", it) }
-            credProps["client_secret"]?.asString()?.let { setIfAbsent("app.security.client.secret", it) }
+            credProps["client_id"]?.asString()?.let { setIfAbsent("app.security.clients[0].id", it) }
+            credProps["client_secret"]?.asString()?.let { setIfAbsent("app.security.clients[0].secret", it) }
         }
 
         // Load AWS/SQS secrets

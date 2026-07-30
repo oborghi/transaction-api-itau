@@ -4,6 +4,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.AppenderBase
 import org.slf4j.LoggerFactory
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.s3.S3Client
@@ -53,15 +54,19 @@ class S3LogAppender : AppenderBase<ILoggingEvent>() {
         try {
             val builder = S3Client.builder()
                 .region(Region.of(region))
-                .credentialsProvider(
+
+            if (endpointUrl.isNotBlank()) {
+                // LocalStack mode: use static credentials + path style
+                builder.credentialsProvider(
                     StaticCredentialsProvider.create(
                         AwsBasicCredentials.create(accessKey, secretKey)
                     )
                 )
-
-            if (endpointUrl.isNotBlank()) {
                 builder.endpointOverride(URI.create(endpointUrl))
-                builder.forcePathStyle(true) // necessário para LocalStack
+                builder.forcePathStyle(true)
+            } else {
+                // AWS mode: use IAM Role (ECS Task Role) or default chain
+                builder.credentialsProvider(DefaultCredentialsProvider.create())
             }
 
             s3Client = builder.build()

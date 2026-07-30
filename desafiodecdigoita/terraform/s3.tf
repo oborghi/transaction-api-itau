@@ -2,7 +2,7 @@
 # S3 Bucket for Application Logs
 # ==========================================
 resource "aws_s3_bucket" "logs" {
-  bucket = "${var.app_name}_logs_${data.aws_caller_identity.current.account_id}"
+  bucket = "${var.app_name}-logs-${data.aws_caller_identity.current.account_id}"
 
   tags = {
     Name        = "${var.app_name}_logs"
@@ -16,6 +16,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
   rule {
     id     = "expire-old-logs"
     status = "Enabled"
+
+    filter {}
 
     expiration {
       days = 90
