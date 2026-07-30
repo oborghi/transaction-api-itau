@@ -31,7 +31,7 @@ class S3LogAppender : AppenderBase<ILoggingEvent>() {
     private val timestampFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS")
 
     private var s3Client: S3Client? = null
-    private var bucketName: String = "transaction-api-logs"
+    private var bucketName: String = "transaction-api_logs"
     private var serviceName: String = "transaction-api"
     private var environment: String = "local"
 
@@ -41,7 +41,7 @@ class S3LogAppender : AppenderBase<ILoggingEvent>() {
     private val flushInterval = 50 // flush a cada 50 eventos
 
     override fun start() {
-        bucketName = System.getenv("S3_LOG_BUCKET") ?: "transaction-api-logs"
+        bucketName = System.getenv("S3_LOG_BUCKET") ?: "transaction-api_logs"
         serviceName = System.getenv("SERVICE_NAME") ?: "transaction-api"
         environment = System.getenv("ENVIRONMENT") ?: "local"
 

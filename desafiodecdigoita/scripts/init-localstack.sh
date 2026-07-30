@@ -42,7 +42,7 @@ echo "   ✅ Filas SQS criadas"
 # ==========================================
 echo ""
 echo "📦 Criando bucket S3..."
-$AWS_CMD s3 mb s3://transaction-api-logs --region sa-east-1 2>/dev/null || true
+$AWS_CMD s3 mb s3://transaction-api_logs --region sa-east-1 2>/dev/null || true
 echo "   ✅ Bucket S3 criado"
 
 # ==========================================

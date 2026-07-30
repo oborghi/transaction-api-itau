@@ -39,7 +39,7 @@ export CLOUDWATCH_ENABLED="true"
 export CLOUDWATCH_NAMESPACE="TransactionAPI"
 
 # S3 Logs (via LocalStack)
-export S3_LOG_BUCKET="transaction-api-logs"
+export S3_LOG_BUCKET="transaction-api_logs"
 export SERVICE_NAME="transaction-api"
 
 # Logging
@@ -50,4 +50,4 @@ echo "✅ Environment: LOCAL"
 echo "   DocumentDB (LocalStack): localhost:27017"
 echo "   LocalStack: localhost:4566"
 echo "   CloudWatch: enabled (via LocalStack)"
-echo "   S3 Logs: s3://transaction-api-logs"
+echo "   S3 Logs: s3://transaction-api_logs"

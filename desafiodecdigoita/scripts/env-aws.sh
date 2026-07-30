@@ -44,7 +44,7 @@ export CLOUDWATCH_NAMESPACE="TransactionAPI"
 export ACTUATOR_EXPOSURE="health,info,metrics"
 
 # S3 Logs (AWS real)
-export S3_LOG_BUCKET="${S3_LOG_BUCKET:-transaction-api-logs}"
+export S3_LOG_BUCKET="${S3_LOG_BUCKET:-transaction-api_logs}"
 export SERVICE_NAME="transaction-api"
 
 # Logging
