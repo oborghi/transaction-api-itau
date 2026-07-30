@@ -1,3 +1,7 @@
+# ==========================================
+# Terraform Outputs
+# ==========================================
+
 output "alb_dns_name" {
   description = "DNS name of the Application Load Balancer"
   value       = aws_lb.main.dns_name
@@ -8,10 +12,9 @@ output "ecr_repository_url" {
   value       = aws_ecr_repository.app.repository_url
 }
 
-output "documentdb_endpoint" {
-  description = "DocumentDB cluster endpoint"
-  value       = aws_docdb_cluster.main.endpoint
-  sensitive   = true
+output "ecr_repository_name" {
+  description = "ECR repository name"
+  value       = aws_ecr_repository.app.name
 }
 
 output "sqs_queue_url" {
@@ -24,9 +27,14 @@ output "sqs_dlq_url" {
   value       = aws_sqs_queue.dlq.id
 }
 
-output "ecr_repository_name" {
-  description = "ECR repository name"
-  value       = aws_ecr_repository.app.name
+output "s3_logs_bucket" {
+  description = "S3 bucket for application logs"
+  value       = aws_s3_bucket.logs.bucket
+}
+
+output "ecs_cluster_name" {
+  description = "ECS cluster name"
+  value       = aws_ecs_cluster.main.name
 }
 
 output "ecs_service_name" {
@@ -34,7 +42,27 @@ output "ecs_service_name" {
   value       = aws_ecs_service.app.name
 }
 
-output "consul_ui_url" {
-  description = "Consul UI URL"
-  value       = "http://${aws_lb.main.dns_name}:8500"
+output "cloudwatch_log_group" {
+  description = "CloudWatch log group name"
+  value       = aws_cloudwatch_log_group.ecs.name
+}
+
+output "cloudwatch_dashboard" {
+  description = "CloudWatch dashboard name"
+  value       = aws_cloudwatch_dashboard.overview.dashboard_name
+}
+
+output "mongodb_service_name" {
+  description = "MongoDB ECS service name"
+  value       = aws_ecs_service.mongodb.name
+}
+
+output "mongodb_host" {
+  description = "MongoDB hostname via Service Discovery (app connect string)"
+  value       = "mongodb.${var.app_name}.internal"
+}
+
+output "deploy_command" {
+  description = "Command to force new ECS deployment (app only, MongoDB stays untouched)"
+  value       = "aws ecs update-service --cluster ${aws_ecs_cluster.main.name} --service ${aws_ecs_service.app.name} --force-new-deployment --region ${var.aws_region}"
 }

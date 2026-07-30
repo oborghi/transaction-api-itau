@@ -1,10 +1,4 @@
 spring:
-  autoconfigure:
-    exclude:
-      - org.springframework.cloud.consul.serviceregistry.ConsulServiceRegistryAutoConfiguration
-      - org.springframework.cloud.consul.serviceregistry.ConsulAutoServiceRegistrationAutoConfiguration
-      - org.springframework.cloud.consul.config.ConsulAutoConfiguration
-      - org.springframework.cloud.consul.discovery.ConsulDiscoveryClientAutoConfiguration
   data:
     mongodb:
       uri: mongodb://admin:admin123@localhost:27017/transaction_db?authSource=admin
@@ -14,14 +8,6 @@ spring:
       spec: maximumSize=1000,expireAfterWrite=24h
     cache-names:
       - jwt-tokens
-  cloud:
-    consul:
-      config:
-        enabled: false
-      discovery:
-        enabled: false
-    vault:
-      enabled: false
 
 # Fixed JWT secrets for test profile (no DynamicPropertySource needed)
 app:
@@ -49,14 +35,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus,metrics
-  health:
-    consul:
-      enabled: false
-  prometheus:
-    metrics:
-      export:
-        enabled: true
+        include: health,info,metrics
 
 resilience4j:
   circuitbreaker:

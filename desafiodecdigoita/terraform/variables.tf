@@ -13,6 +13,12 @@ variable "environment" {
 variable "project_name" {
   description = "Project name used for resource naming"
   type        = string
+  default     = "desafiodecdigoita"
+}
+
+variable "app_name" {
+  description = "Application name used for AWS resource naming"
+  type        = string
   default     = "transaction-api"
 }
 
@@ -28,44 +34,24 @@ variable "availability_zones" {
   default     = ["sa-east-1a", "sa-east-1b"]
 }
 
-variable "container_image" {
-  description = "Docker image for the API"
-  type        = string
-  default     = "transaction-api:latest"
+variable "allowed_cidr_blocks" {
+  description = "CIDR blocks allowed to access the ALB"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
 }
 
-variable "container_cpu" {
-  description = "CPU units for the container (1024 = 1 vCPU)"
-  type        = number
-  default     = 512
-}
-
-variable "container_memory" {
-  description = "Memory for the container in MiB"
-  type        = number
-  default     = 1024
-}
-
-variable "desired_count" {
-  description = "Number of ECS tasks to run"
-  type        = number
-  default     = 2
-}
-
-variable "db_instance_class" {
-  description = "DocumentDB instance class"
-  type        = string
-  default     = "db.r6g.large"
-}
-
+# ==========================================
+# Sensitive Variables (passed via -var or env)
+# ==========================================
 variable "db_master_username" {
-  description = "DocumentDB master username"
+  description = "MongoDB master username"
   type        = string
   sensitive   = true
+  default     = "admin"
 }
 
 variable "db_master_password" {
-  description = "DocumentDB master password"
+  description = "MongoDB master password"
   type        = string
   sensitive   = true
 }
@@ -82,8 +68,8 @@ variable "api_client_secret" {
   sensitive   = true
 }
 
-variable "allowed_cidr_blocks" {
-  description = "CIDR blocks allowed to access the ALB"
-  type        = list(string)
-  default     = ["0.0.0.0/0"]
+variable "ec2_key_name" {
+  description = "EC2 key pair name for SSH access to MongoDB (optional)"
+  type        = string
+  default     = ""
 }

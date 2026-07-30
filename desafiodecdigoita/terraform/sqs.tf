@@ -1,5 +1,5 @@
 resource "aws_sqs_queue" "main" {
-  name                       = "conta-bancaria-criada"
+  name                       = "${var.app_name}_conta-bancaria-criada"
   visibility_timeout_seconds = 30
   message_retention_seconds  = 345600  # 4 days
   receive_wait_time_seconds  = 10
@@ -9,14 +9,14 @@ resource "aws_sqs_queue" "main" {
     maxReceiveCount     = 5
   })
 
-  tags = { Name = "conta-bancaria-criada" }
+  tags = { Name = "${var.app_name}_conta-bancaria-criada" }
 }
 
 resource "aws_sqs_queue" "dlq" {
-  name                      = "conta-bancaria-criada-dlq"
+  name                      = "${var.app_name}_conta-bancaria-criada-dlq"
   message_retention_seconds = 1209600  # 14 days
 
-  tags = { Name = "conta-bancaria-criada-dlq" }
+  tags = { Name = "${var.app_name}_conta-bancaria-criada-dlq" }
 }
 
 resource "aws_sqs_queue_redrive_allow_policy" "dlq" {

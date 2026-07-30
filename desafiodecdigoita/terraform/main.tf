@@ -7,15 +7,6 @@ terraform {
       version = "~> 5.0"
     }
   }
-
-  # Descomente para usar S3 backend
-  # backend "s3" {
-  #   bucket         = "transaction-api-terraform-state"
-  #   key            = "terraform.tfstate"
-  #   region         = "sa-east-1"
-  #   dynamodb_table = "terraform-lock"
-  #   encrypt        = true
-  # }
 }
 
 provider "aws" {

@@ -1,20 +1,29 @@
 package com.itau.transaction.infrastructure.config
 
-import com.amazonaws.xray.interceptors.TracingInterceptor
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
-import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration
 import software.amazon.awssdk.regions.Region
-import software.amazon.awssdk.services.sqs.SqsClient
+import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient
 import java.net.URI
 
+/**
+ * Provides the CloudWatchAsyncClient bean.
+ * Spring Boot's auto-configuration (CloudWatchMetricsExportAutoConfiguration)
+ * will create the CloudWatchMeterRegistry and bind it to the CompositeMeterRegistry
+ * when management.metrics.export.cloudwatch.enabled=true.
+ *
+ * This avoids creating a separate manual CloudWatchMeterRegistry that might not
+ * correctly integrate with the CompositeMeterRegistry used by TransactionMetrics.
+ */
 @Configuration
-class AwsSqsConfig {
+@ConditionalOnProperty(name = ["CLOUDWATCH_ENABLED"], havingValue = "true", matchIfMissing = false)
+class AwsCloudWatchConfig {
 
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -31,47 +40,38 @@ class AwsSqsConfig {
     private lateinit var secretAccessKey: String
 
     @Bean
-    fun sqsClient(): SqsClient {
+    fun cloudWatchAsyncClient(): CloudWatchAsyncClient {
         val regionObj = Region.of(region.ifBlank { "sa-east-1" })
+        log.info("Creating CloudWatchAsyncClient with region: {}", regionObj)
 
-        val overrideConfig = ClientOverrideConfiguration.builder()
-            .addExecutionInterceptor(TracingInterceptor())
-            .build()
-
-        // Se endpoint URL está configurado (LocalStack), usa StaticCredentialsProvider
         if (!endpointUrl.isNullOrBlank()) {
-            log.info("Creating SQS client with endpoint: {}, region: {}", endpointUrl, regionObj)
+            log.info("CloudWatchAsyncClient using endpoint: {}", endpointUrl)
             val credentials = StaticCredentialsProvider.create(
                 AwsBasicCredentials.create(
                     accessKeyId.ifBlank { "test" },
                     secretAccessKey.ifBlank { "test" }
                 )
             )
-            return SqsClient.builder()
+            return CloudWatchAsyncClient.builder()
                 .endpointOverride(URI.create(endpointUrl))
                 .credentialsProvider(credentials)
-                .overrideConfiguration(overrideConfig)
                 .region(regionObj)
                 .build()
         }
 
-        // Se credenciais explícitas foram fornecidas, usa StaticCredentialsProvider
         if (!accessKeyId.isNullOrBlank() && !secretAccessKey.isNullOrBlank()) {
-            log.info("Creating SQS client with StaticCredentialsProvider, region: {}", regionObj)
+            log.info("CloudWatchAsyncClient using StaticCredentialsProvider")
             val credentials = StaticCredentialsProvider.create(
                 AwsBasicCredentials.create(accessKeyId, secretAccessKey)
             )
-            return SqsClient.builder()
+            return CloudWatchAsyncClient.builder()
                 .credentialsProvider(credentials)
-                .overrideConfiguration(overrideConfig)
                 .region(regionObj)
                 .build()
         }
 
-        // Caso contrário, usa DefaultCredentialsProvider (IAM role em ECS, etc.)
-        log.info("Creating SQS client with DefaultCredentialsProviderChain, region: {}", regionObj)
-        return SqsClient.builder()
-            .overrideConfiguration(overrideConfig)
+        log.info("CloudWatchAsyncClient using DefaultCredentialsProviderChain (IAM role)")
+        return CloudWatchAsyncClient.builder()
             .region(regionObj)
             .build()
     }

@@ -10,13 +10,13 @@ import javax.crypto.SecretKey
 
 @Component
 class JwtTokenProvider(
-    @Value("\${app.security.jwt.secret:MyDefaultSecretKeyForDevelopmentOnly2024!}")
+    @Value("\${app.security.jwt.secret}")
     private val secret: String,
 
     @Value("\${app.security.jwt.expiration:86400}")
     private val expiration: Long,
 
-    @Value("\${app.security.jwt.issuer:transaction-api}")
+    @Value("\${app.security.jwt.issuer}")
     private val issuer: String
 ) {
     private val key: SecretKey by lazy {

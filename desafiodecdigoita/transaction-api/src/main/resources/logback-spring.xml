@@ -1,0 +1,15 @@
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <!-- S3 Log Appender (envia logs para S3/LocalStack) -->
+    <appender name="S3" class="com.itau.transaction.infrastructure.config.S3LogAppender"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="S3"/>
+    </root>
+
+    <logger name="com.itau.transaction" level="DEBUG"/>
+    <logger name="org.springframework.data.mongodb" level="DEBUG"/>
+</configuration>
