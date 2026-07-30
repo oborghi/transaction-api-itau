@@ -44,7 +44,9 @@ jacoco.exec
 # Terraform
 terraform/.terraform/
 terraform/*.tfstate
-terraform/*.tfstate.backup
+terraform/*.tfstate*
+terraform/tfplan
+terraform/.terraform.lock.hcl
 terraform/*.tfvars
 !terraform/environments/*.tfvars
 
