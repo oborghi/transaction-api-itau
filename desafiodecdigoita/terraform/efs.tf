@@ -62,8 +62,8 @@ resource "aws_efs_access_point" "mongodb" {
   root_directory {
     path = "/data/db"
     creation_info {
-      owner_uid   = 0
-      owner_gid   = 0
+      owner_uid   = 999
+      owner_gid   = 999
       permissions = "0777"
     }
   }

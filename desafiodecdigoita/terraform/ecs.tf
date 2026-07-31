@@ -185,10 +185,6 @@ resource "aws_ecs_task_definition" "mongodb" {
     efs_volume_configuration {
       file_system_id     = aws_efs_file_system.mongodb.id
       transit_encryption = "ENABLED"
-      authorization_config {
-        access_point_id = aws_efs_access_point.mongodb.id
-        iam             = "ENABLED"
-      }
     }
   }
 
@@ -286,6 +282,11 @@ resource "aws_ecs_service" "mongodb" {
   task_definition = aws_ecs_task_definition.mongodb.arn
   desired_count   = 1
   launch_type     = "FARGATE"
+
+  # Zero-downtime não se aplica ao MongoDB — ele não pode ter 
+  # duas tasks simultâneas pois o EFS não suporta lock concorrente
+  deployment_minimum_healthy_percent = 0
+  deployment_maximum_percent         = 100
 
   network_configuration {
     subnets          = aws_subnet.public[*].id
