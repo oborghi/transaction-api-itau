@@ -283,6 +283,11 @@ resource "aws_ecs_service" "mongodb" {
   desired_count   = 1
   launch_type     = "FARGATE"
 
+  # Zero-downtime não se aplica ao MongoDB — ele não pode ter 
+  # duas tasks simultâneas pois o EFS não suporta lock concorrente
+  deployment_minimum_healthy_percent = 0
+  deployment_maximum_percent         = 100
+
   network_configuration {
     subnets          = aws_subnet.public[*].id
     security_groups  = [aws_security_group.mongodb.id]
