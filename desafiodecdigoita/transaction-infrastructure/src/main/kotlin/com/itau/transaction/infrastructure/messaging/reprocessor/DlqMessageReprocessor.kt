@@ -3,6 +3,7 @@ package com.itau.transaction.infrastructure.messaging.reprocessor
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.itau.transaction.application.service.RegisterAccountUseCase
+import com.itau.transaction.infrastructure.config.XRayTracing
 import io.github.resilience4j.circuitbreaker.CircuitBreaker
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry
 import org.slf4j.LoggerFactory
@@ -31,11 +32,13 @@ class DlqMessageReprocessor(
         circuitBreakerRegistry.circuitBreaker("dlqReprocessorCircuitBreaker")
 
     fun reprocess(message: Message) {
-        CircuitBreaker.decorateCallable(circuitBreaker) {
-            val (accountId, owner, status) = parseMessage(message.body())
-            registerAccountUseCase.execute(accountId, owner, status)
-            log.debug("Successfully reprocessed DLQ message ${message.messageId()}")
-        }.call()
+        XRayTracing.trace("sqs.dlq.reprocess") {
+            CircuitBreaker.decorateCallable(circuitBreaker) {
+                val (accountId, owner, status) = parseMessage(message.body())
+                registerAccountUseCase.execute(accountId, owner, status)
+                log.debug("Successfully reprocessed DLQ message ${message.messageId()}")
+            }.call()
+        }
     }
 
     private fun parseMessage(body: String): Triple<String, String, String> {

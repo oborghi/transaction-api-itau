@@ -114,13 +114,15 @@ resource "aws_cloudwatch_dashboard" "overview" {
         type = "metric"
         properties = {
           metrics = [
-            ["TransactionAPI", "transaction.total.count", "type", "CREDIT", "status", "SUCCEEDED", { stat = "Sum", label = "Total Transactions" }],
-            [".", "sqs.messages.consumed.count", { stat = "Sum", label = "SQS Messages Consumed" }],
-            [".", "sqs.messages.failed.count", { stat = "Sum", label = "SQS Messages Failed" }],
-            [".", "transaction.authorization.latency.avg", { stat = "Average", label = "Avg Latency (s)" }],
-            [".", "transaction.authorization.latency.max", { stat = "Maximum", label = "Max Latency (s)" }],
-            [".", "account.balance.avg.value", { stat = "Average", label = "Avg Balance (BRL)" }],
-            [".", "account.total.value", { stat = "Average", label = "Active Accounts" }]
+            ["TransactionAPI", "transaction.total.count", "type", "CREDIT", "status", "SUCCEEDED", { stat = "Sum", label = "Credit Transactions" }],
+            ["TransactionAPI", "transaction.total.count", "type", "DEBIT", "status", "SUCCEEDED", { stat = "Sum", label = "Debit Transactions" }],
+            ["TransactionAPI", "transaction.total.count", "status", "FAILED", { stat = "Sum", label = "Failed Transactions" }],
+            ["TransactionAPI", "sqs.messages.consumed.count", { stat = "Sum", label = "SQS Consumed" }],
+            ["TransactionAPI", "sqs.messages.failed.count", { stat = "Sum", label = "SQS Failed" }],
+            ["TransactionAPI", "transaction.authorization.latency.avg", { stat = "Average", label = "Avg Latency (s)" }],
+            ["TransactionAPI", "transaction.authorization.latency.max", { stat = "Maximum", label = "Max Latency (s)" }],
+            ["TransactionAPI", "account.balance.avg.value", { stat = "Average", label = "Avg Balance (BRL)" }],
+            ["TransactionAPI", "account.total.value", { stat = "Average", label = "Active Accounts" }]
           ]
           period = 300
           region = var.aws_region
@@ -164,7 +166,42 @@ resource "aws_cloudwatch_dashboard" "overview" {
         }
       },
       # ──────────────────────────────────────
-      # Linha 3: Application Logs
+      # Linha 3: SLO Compliance Overview
+      # ──────────────────────────────────────
+      {
+        type = "metric"
+        properties = {
+          metrics = [
+            ["TransactionAPI", "transaction.authorization.latency.percentile.value", "phi", "0.95", { stat = "Average", label = "SLO-1: P95 Latency (s)", color = "#ff9900" }],
+            ["TransactionAPI", "transaction.total.count", "status", "FAILED", { stat = "Sum", label = "SLO-2: Failed Transactions", color = "#d13212" }],
+            ["TransactionAPI", "sqs.messages.failed.count", { stat = "Sum", label = "SLO-5: SQS Failures", color = "#e6b81e" }]
+          ]
+          period = 300
+          region = var.aws_region
+          title  = "SLO Compliance - Business Metrics"
+          width  = 12
+          height = 6
+        }
+      },
+      # ──────────────────────────────────────
+      # Linha 3: SLO Alarms Status
+      # ──────────────────────────────────────
+      {
+        type = "metric"
+        properties = {
+          metrics = [
+            ["AWS/ApplicationELB", "HTTPCode_Target_5XX_Count", "LoadBalancer", aws_lb.main.arn_suffix, { stat = "Sum", label = "SLO-4: ALB 5xx Errors", color = "#d13212" }],
+            ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", aws_sqs_queue.dlq.name, { stat = "Sum", label = "SLO-3: DLQ Messages", color = "#e6b81e" }]
+          ]
+          period = 300
+          region = var.aws_region
+          title  = "SLO Alarms - Infrastructure"
+          width  = 12
+          height = 6
+        }
+      },
+      # ──────────────────────────────────────
+      # Linha 4: Application Logs
       # ──────────────────────────────────────
       {
         type = "log"

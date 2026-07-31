@@ -1,6 +1,5 @@
 package com.itau.transaction.infrastructure.config
 
-import com.amazonaws.xray.interceptors.TracingInterceptor
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
@@ -35,7 +34,6 @@ class AwsSqsConfig {
         val regionObj = Region.of(region.ifBlank { "sa-east-1" })
 
         val overrideConfig = ClientOverrideConfiguration.builder()
-            .addExecutionInterceptor(TracingInterceptor())
             .build()
 
         // Se endpoint URL está configurado (LocalStack), usa StaticCredentialsProvider

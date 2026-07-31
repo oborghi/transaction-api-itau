@@ -24,30 +24,32 @@ class SqsAccountCreatedListener(
 
     @Scheduled(fixedDelayString = "\${app.sqs.poll-interval:5000}")
     fun pollMessages() {
-        try {
-            val request = ReceiveMessageRequest.builder()
-                .queueUrl(queueUrl)
-                .maxNumberOfMessages(10)
-                .waitTimeSeconds(5)
-                .build()
+        XRayTracing.traceBackground("sqs-poll") {
+            try {
+                val request = ReceiveMessageRequest.builder()
+                    .queueUrl(queueUrl)
+                    .maxNumberOfMessages(10)
+                    .waitTimeSeconds(5)
+                    .build()
 
-            val messages = sqsClient.receiveMessage(request).messages()
+                val messages = sqsClient.receiveMessage(request).messages()
 
-            messages.forEach { message ->
-                XRayTracing.trace("sqs.consume") {
-                    try {
-                        accountCreatedConsumer.consume(message.body())
-                        metricsPort.recordSqsMessageConsumed()
-                        deleteMessage(message.receiptHandle())
-                        logger.info("Successfully processed message {}", message.messageId())
-                    } catch (e: Exception) {
-                        metricsPort.recordSqsMessageFailed()
-                        logger.error("Failed to process message {}: {}", message.messageId(), e.message)
+                messages.forEach { message ->
+                    XRayTracing.trace("sqs.consume") {
+                        try {
+                            accountCreatedConsumer.consume(message.body())
+                            metricsPort.recordSqsMessageConsumed()
+                            deleteMessage(message.receiptHandle())
+                            logger.info("Successfully processed message {}", message.messageId())
+                        } catch (e: Exception) {
+                            metricsPort.recordSqsMessageFailed()
+                            logger.error("Failed to process message {}: {}", message.messageId(), e.message)
+                        }
                     }
                 }
+            } catch (e: Exception) {
+                logger.error("Error polling SQS: {}", e.message)
             }
-        } catch (e: Exception) {
-            logger.error("Error polling SQS: {}", e.message)
         }
     }
 

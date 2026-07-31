@@ -9,12 +9,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
-/**
- * AWS X-Ray configuration for distributed tracing.
- *
- * Works with LocalStack (local) and real AWS X-Ray.
- * The servlet filter automatically traces all incoming HTTP requests.
- */
 @Configuration
 class XRayConfig {
 
@@ -25,7 +19,7 @@ class XRayConfig {
             val builder = AWSXRayRecorderBuilder.standard()
             builder.withSamplingStrategy(NoSamplingStrategy())
             AWSXRay.setGlobalRecorder(builder.build())
-            log.info("AWS X-Ray recorder initialized")
+            log.info("AWS X-Ray recorder initialized with NoSamplingStrategy")
         } catch (e: Exception) {
             log.warn("Failed to initialize X-Ray recorder: ${e.message}")
         }
