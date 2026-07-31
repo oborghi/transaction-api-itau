@@ -529,25 +529,50 @@ A aplicação exporta as seguintes métricas para CloudWatch:
 
 ### CloudWatch Dashboard
 
-O Terraform cria automaticamente um dashboard `transaction-api_overview` com 6 widgets:
+O Terraform cria automaticamente um dashboard `transaction-api_overview` com **7 widgets**:
 
 | Widget | Tipo | Descrição |
 |--------|------|-----------|
 | **ECS CPU & Memory** | 📈 Métrica | CPU e Memory do ECS Fargate (últimos 5 min) |
 | **ALB Request Count** | 📈 Métrica | Total de requests no Application Load Balancer |
-| **Transaction API - Business Metrics** | 📈 Métrica | `TransactionsProcessed`, `TransactionSuccessRate`, `AuthorizationLatency` |
+| **Transaction API - Business Metrics** | 📈 Métrica | Transações (crédito/débito/falha), latência (avg/max), saldo médio, contas ativas, SQS consumidos/falhas |
 | **SQS Queue - Messages** | 📈 Métrica | Mensagens visíveis, in-flight e deletadas |
+| **SLO Compliance - Business Metrics** | 📈 Métrica | P95 Latency, Transações com falha, SQS failures |
+| **SLO Alarms - Infrastructure** | 📈 Métrica | ALB 5xx errors, DLQ messages |
 | **Application Logs** | 📋 Logs | Últimos 50 logs da aplicação CloudWatch |
-| **X-Ray Traces** | 📝 Links | Links rápidos para X-Ray Console e Service Map |
 
 **URL do Dashboard:**
 ```bash
 https://sa-east-1.console.aws.amazon.com/cloudwatch/home?region=sa-east-1#dashboards:name=transaction-api_overview
 ```
 
-**Alarmes:**
+### SLOs (Service Level Objectives)
+
+A aplicação, por movimentar saldo de contas bancárias 24h/dia, possui os seguintes SLOs configurados no dashboard:
+
+| SLO | Métrica | Objetivo | Justificativa |
+|-----|---------|----------|---------------|
+| **SLO-1: Latência P95** | `transaction.authorization.latency.percentile` (phi=0.95) | ≤ 2s | Transações bancárias devem ser rápidas para não bloquear o fluxo do cliente |
+| **SLO-2: Taxa de Falhas** | `transaction.total.count` (status=FAILED) | < 1% das transações | Sistema financeiro 24h precisa de alta confiabilidade |
+| **SLO-3: DLQ Messages** | `ApproximateNumberOfMessagesVisible` (DLQ) | 0 mensagens na DLQ | Mensagens na DLQ indicam falhas não processadas que precisam de reparação |
+| **SLO-4: ALB 5xx** | `HTTPCode_Target_5XX_Count` | 0 erros 5xx | Erros de servidor impactam diretamente a disponibilidade do serviço |
+| **SLO-5: SQS Failures** | `sqs.messages.failed.count` | < 0.1% das mensagens | Falhas no consumo de SQS indicam problemas de processamento assíncrono |
+
+**Alarmes (Infrastructure):**
 - `transaction-api_high_cpu` — CPU > 80% por 2 períodos consecutivos de 5 min
 - `transaction-api_high_memory` — Memory > 80% por 2 períodos consecutivos de 5 min
+
+### CloudWatch Metrics Export
+
+O export das métricas para CloudWatch é feito manualmente pelo `CloudWatchMeterRegistry` (criado em `AwsCloudWatchConfig.kt`), pois o Spring Boot 3.3.x não inclui a auto-configuração `CloudWatchMetricsExportAutoConfiguration` no `spring-boot-actuator-autoconfigure`. O registro é adicionado ao `Metrics.globalRegistry` do Micrometer, que é delegado pelo `CompositeMeterRegistry` do Actuator.
+
+**Configuração via variáveis de ambiente:**
+| Variável | Padrão | Descrição |
+|----------|--------|-----------|
+| `CLOUDWATCH_ENABLED` | `false` | Habilita export de métricas para CloudWatch |
+| `CLOUDWATCH_NAMESPACE` | `TransactionAPI` | Namespace no CloudWatch |
+| `management.metrics.export.cloudwatch.step` | `30s` | Frequência de publicação |
+| `management.metrics.export.cloudwatch.batch-size` | `20` | Tamanho do lote de publicação |
 
 ### Acesso ao CloudWatch
 

@@ -56,10 +56,10 @@ resource "aws_iam_role_policy_attachment" "ecs_task_secretsmanager" {
   policy_arn = "arn:aws:iam::aws:policy/SecretsManagerReadWrite"
 }
 
-# CloudWatch Metrics Access
+# CloudWatch Metrics Access (PutMetricData for Micrometer CloudWatch export)
 resource "aws_iam_role_policy_attachment" "ecs_task_cloudwatch" {
   role       = aws_iam_role.ecs_task.name
-  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchFullAccessV2"
 }
 
 # S3 Access (for logs)

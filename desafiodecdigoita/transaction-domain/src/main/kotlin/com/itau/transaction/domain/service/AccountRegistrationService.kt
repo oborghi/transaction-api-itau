@@ -24,7 +24,7 @@ class AccountRegistrationService(
             id = id,
             owner = owner,
             balance = Money.zero(),
-            status = AccountStatus.valueOf(status),
+            status = AccountStatus.fromString(status),
             createdAt = Instant.now(),
             updatedAt = Instant.now(),
             version = 0

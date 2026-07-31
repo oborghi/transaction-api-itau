@@ -1,6 +1,7 @@
 package com.itau.transaction.infrastructure.messaging.producer
 
 import com.itau.transaction.domain.port.EventPublisherPort
+import com.itau.transaction.infrastructure.config.XRayTracing
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -19,18 +20,20 @@ class SqsEventPublisher(
     private lateinit var queueUrl: String
 
     override fun publish(event: Any) {
-        try {
-            val messageBody = objectMapper.writeValueAsString(event)
-            val request = SendMessageRequest.builder()
-                .queueUrl(queueUrl)
-                .messageBody(messageBody)
-                .build()
+        XRayTracing.trace("sqs.publish") {
+            try {
+                val messageBody = objectMapper.writeValueAsString(event)
+                val request = SendMessageRequest.builder()
+                    .queueUrl(queueUrl)
+                    .messageBody(messageBody)
+                    .build()
 
-            sqsClient.sendMessage(request)
-            logger.info("Published event to SQS: {}", event::class.simpleName)
-        } catch (e: Exception) {
-            logger.error("Failed to publish event to SQS: {}", e.message)
-            throw e
+                sqsClient.sendMessage(request)
+                logger.info("Published event to SQS: {}", event::class.simpleName)
+            } catch (e: Exception) {
+                logger.error("Failed to publish event to SQS: {}", e.message)
+                throw e
+            }
         }
     }
 }
