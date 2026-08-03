@@ -489,6 +489,21 @@ def generate_presentation():
         pdf.multi_cell(PAGE_W - 2 * x - 16, 3, desc)
         y += 14.5
 
+    y += 4
+    pdf.section_title(x, y, 'Monitoramento e Dashboards (CloudWatch)')
+    y += 7
+    pdf.set_text_color(*C_AZUL_ESCURO)
+    pdf.set_font('Helvetica', 'B', 7)
+    pdf.set_xy(x, y)
+    pdf.cell(0, 4, "Dashboard: transaction-api_overview (7 widgets criados via Terraform)")
+    pdf.set_font('Helvetica', '', 6.5)
+    pdf.set_text_color(*C_PRETO)
+    pdf.set_xy(x, y + 4)
+    pdf.multi_cell(PAGE_W - 2 * x, 3, 
+        "Inclui ECS CPU/Memory, ALB Requests, Business Metrics (transacoes, latencia, saldo), SQS Queue, SLO Compliance, Alarms e Logs.\n"
+        "Link: https://sa-east-1.console.aws.amazon.com/cloudwatch/home?region=sa-east-1#dashboards:name=transaction-api_overview"
+    )
+
     # ═══════════════════════════════════════════════════════════════
     # SLIDE 10 - FinOps
     # ═══════════════════════════════════════════════════════════════
