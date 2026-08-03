@@ -57,7 +57,14 @@ if ! docker info > /dev/null 2>&1; then
 fi
 
 # ==========================================
-# 2. Parar serviços anteriores
+# 2. Garantir permissão de execução nos scripts
+# ==========================================
+echo "🔧 Garantindo permissão de execução nos scripts..."
+chmod +x "$SCRIPT_DIR/init-localstack.sh"
+echo "   ✅ Permissão garantida"
+
+# ==========================================
+# 3. Parar serviços anteriores
 # ==========================================
 echo "🛑 Parando serviços anteriores..."
 
@@ -71,7 +78,7 @@ fi
 bash "$SCRIPT_DIR/stop-all.sh"
 
 # ==========================================
-# 3. Subir infraestrutura (LocalStack)
+# 4. Subir infraestrutura (LocalStack)
 # ==========================================
 echo "📦 Subindo infraestrutura..."
 docker compose up -d localstack
@@ -92,7 +99,7 @@ wait_for_service() {
 }
 
 # ==========================================
-# 4. Aguardar LocalStack ficar saudável
+# 5. Aguardar LocalStack ficar saudável
 # ==========================================
 echo ""
 echo "⏳ Aguardando LocalStack ficar saudável..."
@@ -105,21 +112,21 @@ else
 fi
 
 # ==========================================
-# 5. Recursos do LocalStack (SQS, S3, Secrets)
+# 6. Recursos do LocalStack (SQS, S3, Secrets)
 # ==========================================
 # SQS queues, S3 bucket e Secrets são criados automaticamente
 # pelo script init-localstack.sh montado em /etc/localstack/init/ready.d/
 # que o LocalStack executa ao atingir o estado "ready".
 
 # ==========================================
-# 6. Subir aplicação
+# 7. Subir aplicação
 # ==========================================
 echo ""
 echo "🚀 Subindo Transaction API..."
 docker compose up -d --build transaction-api
 
 # ==========================================
-# 8. Aguardar API ficar saudável
+# 9. Aguardar API ficar saudável
 # ==========================================
 echo ""
 echo "⏳ Aguardando API ficar saudável..."

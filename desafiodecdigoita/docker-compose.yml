@@ -56,22 +56,19 @@ services:
       - QUEUE_NAME=conta-bancaria-criada
       - LOCALSTACK_ENDPOINT=http://localstack:4566
       - TOTAL_ACCOUNTS=100000
-      - GOPROXY=https://proxy.golang.org
-      - GOSUMDB=sum.golang.org
+      - AWS_DEFAULT_REGION=sa-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+    volumes:
+      - ./scripts/message-generator.go:/app/message-generator.go
+    working_dir: /app
     command: >
       /bin/sh -c "
-        openssl s_client -showcerts -connect proxy.golang.org:443 </dev/null 2>/dev/null |
-          awk '/-----BEGIN CERTIFICATE-----/,/-----END CERTIFICATE-----/ { print $0 }' > /usr/local/share/ca-certificates/ca_bundle.crt &&
-        update-ca-certificates &&
-        rm -rf /tmp/go && mkdir -p /tmp/go && cd /tmp/go &&
-        echo [base64 encoded go source] | base64 -d > message-generator.go &&
-        go clean -modcache &&
+        cd /app &&
         go mod init message-generator &&
         go mod tidy &&
-        go mod download &&
         go run message-generator.go
       "
-    working_dir: /home
 
   # --- Aplicação ---
   transaction-api:
