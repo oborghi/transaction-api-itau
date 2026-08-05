@@ -172,8 +172,8 @@ def generate_presentation():
     pdf.add_page_slide('Arquitetura AWS', 'Visao Geral do Sistema (README.md)')
     img_aws = os.path.join(SCRIPT_DIR, 'diagrama_aws_readme.png')
     if os.path.exists(img_aws):
-        img_w = 210
-        img_h = 210 * (850 / 1000)
+        img_w = 265
+        img_h = 265 * (850 / 1000)
         cx = (PAGE_W - img_w) / 2
         cy = (PAGE_H - img_h) / 2 + 5
         pdf.image(img_aws, x=cx, y=cy, w=img_w, h=img_h)
