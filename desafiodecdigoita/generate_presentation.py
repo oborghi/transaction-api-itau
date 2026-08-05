@@ -167,26 +167,27 @@ def generate_presentation():
         pdf.cell(0, 4, b)
 
     # ═══════════════════════════════════════════════════════════════
-    # SLIDE 3 - Arquitetura AWS (Novo Slide 1 pedido)
+    # SLIDE 3 - Arquitetura AWS (Diagrama README.md)
     # ═══════════════════════════════════════════════════════════════
     pdf.add_page_slide('Arquitetura AWS', 'Visao Geral do Sistema (README.md)')
-    img_v1 = os.path.join(SCRIPT_DIR, 'diagrama_v1.png')
-    if os.path.exists(img_v1):
+    img_aws = os.path.join(SCRIPT_DIR, 'diagrama_aws_readme.png')
+    if os.path.exists(img_aws):
         img_w = 210
-        img_h = 210 * (700 / 900)
+        img_h = 210 * (850 / 1000)
         cx = (PAGE_W - img_w) / 2
         cy = (PAGE_H - img_h) / 2 + 5
-        pdf.image(img_v1, x=cx, y=cy, w=img_w, h=img_h)
+        pdf.image(img_aws, x=cx, y=cy, w=img_w, h=img_h)
     else:
         pdf.set_text_color(*C_VERMELHO)
         pdf.set_font('Helvetica', 'I', 8)
         pdf.set_xy(MARGIN, 100)
-        pdf.cell(0, 5, f'Diagrama nao encontrado')
+        pdf.cell(0, 5, f'Diagrama AWS nao encontrado')
 
     # ═══════════════════════════════════════════════════════════════
     # SLIDE 4 - Diagrama V1
     # ═══════════════════════════════════════════════════════════════
     pdf.add_page_slide('Diagrama da Arquitetura Atual (V1)', 'ECS Fargate + MongoDB Auto-gerido')
+    img_v1 = os.path.join(SCRIPT_DIR, 'diagrama_v1.png')
     if os.path.exists(img_v1):
         img_w = 210
         img_h = 210 * (700 / 900)
