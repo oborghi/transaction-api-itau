@@ -1,0 +1,57 @@
+graph TB
+    subgraph "AWS Cloud"
+        subgraph "VPC (10.0.0.0/16)"
+            subgraph "Public Subnets"
+                ALB["ALB<br/>HTTP:80"]
+                
+                subgraph "ECS Task - MongoDB"
+                    MONGO["mongodb:7.0<br/>Port 27017"]
+                    EFS_MONGO["EFS<br/>MongoDB /data/db"]
+                end
+
+                subgraph "ECS Task - App"
+                    APP["transaction-api-app<br/>Port 8080"]
+                end
+                
+                SD["Service Discovery<br/>mongodb.transaction-api.internal"]
+            end
+        end
+
+        SQS["SQS Queue<br/>conta-bancaria-criada"]
+        DLQ["SQS DLQ"]
+        ECR["ECR<br/>Docker Images"]
+        SM["Secrets Manager<br/>JWT, Credentials, SQS"]
+        CW["CloudWatch<br/>Logs + Metrics + Dashboard"]
+        S3["S3 Bucket<br/>Application Logs"]
+        XR["X-Ray<br/>Distributed Tracing"]
+    end
+
+    Client["👤 Cliente"] -->|"HTTP:80"| ALB
+    ALB -->|"forward"| APP
+    APP -->|"mongodb.transaction-api.internal:27017"| MONGO
+    MONGO -->|"/data/db"| EFS_MONGO
+    MONGO -.->|"service discovery"| SD
+    SD -.->|"resolve DNS"| APP
+    APP --> SQS
+    SQS -.->|"maxReceiveCount=5"| DLQ
+    APP --> CW
+    APP --> XR
+    APP -.->|"lê secrets"| SM
+    APP --> S3
+    ECR -->|"imagem Docker"| APP
+
+    style Client fill:#003366,color:#fff
+    style ALB fill:#0066CC,color:#fff
+    style APP fill:#003366,color:#fff
+    style MONGO fill:#009650,color:#fff
+    style EFS_MONGO fill:#C8E1F5,color:#003366,stroke:#0066CC
+    style SD fill:#C8E1F5,color:#003366,stroke:#0066CC
+    style SQS fill:#C8E1F5,color:#003366,stroke:#0066CC
+    style DLQ fill:#F5C8C8,color:#961E1E,stroke:#C83232
+    style ECR fill:#C8E1F5,color:#003366,stroke:#0066CC
+    style SM fill:#C8E1F5,color:#003366,stroke:#0066CC
+    style CW fill:#C8E1F5,color:#003366,stroke:#0066CC
+    style S3 fill:#C8E1F5,color:#003366,stroke:#0066CC
+    style XR fill:#C8E1F5,color:#003366,stroke:#0066CC
+    style AWS fill:#F0F4F8,color:#003366,stroke:#0066CC
+    style VPC fill:#FFF,color:#003366,stroke:#0066CC
