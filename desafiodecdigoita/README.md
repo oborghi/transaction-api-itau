@@ -643,13 +643,104 @@ Variável de Ambiente (System.getenv) → Secrets Manager → Valor default do a
 
 ---
 
-## CI/CD
 
-| Workflow | Trigger | Ação |
-|----------|---------|------|
-| `ci.yml` | Push/PR | Build + Test + Coverage + Docker |
-| `cd-staging.yml` | Push to develop | Deploy staging |
-| `cd-production.yml` | Manual | Deploy production |
+## CI/CD — AWS CodePipeline (Proposto)
+
+O pipeline de CI/CD foi migrado do GitHub Actions para **AWS CodePipeline**, aproveitando a integração nativa com os serviços AWS (ECS, ECR, CloudWatch) e permitindo blue/green deployment com zero-downtime.
+
+### Arquitetura do Pipeline
+
+```mermaid
+graph LR
+    A["GitHub<br/>Push"] --> B["CodePipeline<br/>Source"]
+    B --> C["CodeBuild<br/>Test + Build"]
+    C --> D["ECR<br/>Push Image"]
+    D --> E["CodeDeploy<br/>Blue/Green ECS"]
+    E --> F["CodeBuild<br/>Post-Deploy Tests"]
+    F -->|"✅ Sucesso"| G["ECS Running<br/>New Version"]
+    F -->|"❌ Falha"| H["CloudWatch Alarm<br/>Rollback"]
+    H --> I["CodeDeploy<br/>Rollback"]
+    I --> E
+```
+
+### Estágios do Pipeline
+
+| Estágio | Serviço | Ação |
+|---------|---------|------|
+| **Source** | GitHub (Webhook) | Detecta push no branch e dispara o pipeline automaticamente |
+| **Build** | AWS CodeBuild | Executa `mvn clean test package` com verificação de cobertura JaCoCo (≥ 80%) |
+| **Docker Build** | AWS CodeBuild | `docker build` + `docker push` para ECR com tag `latest` e commit hash |
+| **Deploy** | AWS CodeDeploy | Blue/green deployment no ECS Fargate com zero-downtime |
+| **Verify** | AWS CodeBuild | Executa bateria de testes pós-deploy (health check, API, SQS, transações) |
+| **Rollback** | CloudWatch Alarm | Em caso de falha, reverte automaticamente para a última versão estável |
+
+### Variáveis de Ambiente do Pipeline
+
+| Variável | Descrição | Exemplo |
+|----------|-----------|---------|
+| `ENVIRONMENT` | Ambiente de deploy | `dev`, `staging`, `production` |
+| `AWS_REGION` | Região AWS | `sa-east-1` |
+| `ECS_CLUSTER` | Nome do cluster ECS | `transaction-api_cluster` |
+| `ECS_SERVICE` | Nome do serviço ECS | `transaction-api_service` |
+| `ECR_REPOSITORY` | URI do repositório ECR | `<account>.dkr.ecr.sa-east-1.amazonaws.com/transaction-api` |
+
+### buildspec.yml (Proposto)
+
+```yaml
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      java: corretto21
+    commands:
+      - echo "Using Java $(java -version)"
+  pre_build:
+    commands:
+      - echo "Logging in to Amazon ECR..."
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_TAG=${COMMIT_HASH:=latest}
+  build:
+    commands:
+      - echo "Running tests and building..."
+      - mvn clean test package -DskipTests=false
+      - echo "Building Docker image..."
+      - docker build -t $ECR_REPOSITORY:latest .
+      - docker tag $ECR_REPOSITORY:latest $ECR_REPOSITORY:$IMAGE_TAG
+  post_build:
+    commands:
+      - echo "Pushing Docker images..."
+      - docker push $ECR_REPOSITORY:latest
+      - docker push $ECR_REPOSITORY:$IMAGE_TAG
+      - echo "Creating imagedefinitions.json..."
+      - printf '[{"name":"transaction-api-app","imageUri":"%s"}]' $ECR_REPOSITORY:$IMAGE_TAG > imagedefinitions.json
+artifacts:
+  files: imagedefinitions.json
+```
+
+### Custo Estimado
+
+| Serviço | Custo/mês | Observação |
+|---------|-----------|------------|
+| AWS CodePipeline | ~$1.00 | 1 pipeline ativo (free tier: 1 pipe grátis/mês) |
+| AWS CodeBuild | ~$0.50 | 100 minutos de build/mês (free tier: 100 min/mês) |
+| AWS CodeDeploy | $0.00 | Sem custo adicional para ECS |
+| **Total** | **~$1.50/mês** | |
+
+### Benefícios do CodePipeline vs GitHub Actions
+
+| Aspecto | GitHub Actions | AWS CodePipeline |
+|---------|---------------|------------------|
+| **Integração AWS** | Indireta (via OIDC) | Nativa (IAM + ECR + ECS + CloudWatch) |
+| **Blue/Green ECS** | Script manual | ✅ CodeDeploy nativo |
+| **Rollback automático** | Custom script | ✅ Nativo via CloudWatch Alarms |
+| **Custo** | Gratuito (público) | ~$1.50/mês |
+| **Auditoria** | GitHub Audit Log | AWS CloudTrail |
+| **IAM Permissions** | OIDC federation | Direto via IAM Roles |
+| **Approval gates** | Environments | ✅ Manual approval stage nativo |
+
+> 💡 **Recomendação**: O CodePipeline é a escolha ideal para times que já utilizam AWS como provedor de cloud, pois elimina a complexidade de gerenciar credenciais OIDC e oferece integração direta com ECS, ECR e CloudWatch para blue/green deployments e rollback automático.
 
 ---
 

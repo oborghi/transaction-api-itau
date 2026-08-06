@@ -1,0 +1,40 @@
+flowchart LR
+    subgraph AWS["AWS Cloud"]
+        subgraph VPC["VPC 10.0.0.0/16"]
+            Client["Cliente<br/>Mobile/Web"]
+            ALB["ALB<br/>HTTP:80"]
+            ECS["ECS Fargate<br/>App + MongoDB"]
+            EFS["EFS<br/>25GB persistencia"]
+
+            Client --> ALB
+            ALB --> ECS
+            ECS --> EFS
+
+            SQS["SQS + DLQ<br/>Filas"]
+            Secrets["Secrets Manager<br/>Credenciais"]
+            CW["CloudWatch<br/>Logs & Metrics"]
+            ECR["ECR<br/>Registry"]
+            S3["S3<br/>Logs"]
+            XRay["X-Ray<br/>Tracing"]
+
+            ECS -.- SQS
+            ECS -.- Secrets
+            ECS -.- CW
+            ECS -.- ECR
+            ECS -.- S3
+            ECS -.- XRay
+        end
+    end
+
+    style Client fill:#003366,color:#fff
+    style ALB fill:#0066CC,color:#fff
+    style ECS fill:#003366,color:#fff
+    style EFS fill:#009650,color:#fff
+    style SQS fill:#C8E1F5,color:#003366,stroke:#0066CC
+    style Secrets fill:#C8E1F5,color:#003366,stroke:#0066CC
+    style CW fill:#C8E1F5,color:#003366,stroke:#0066CC
+    style ECR fill:#C8E1F5,color:#003366,stroke:#0066CC
+    style S3 fill:#C8E1F5,color:#003366,stroke:#0066CC
+    style XRay fill:#C8E1F5,color:#003366,stroke:#0066CC
+    style AWS fill:#C8E1F5,color:#003366,stroke:#0066CC
+    style VPC fill:#fff,color:#003366,stroke:#0066CC
