@@ -1,0 +1,64 @@
+flowchart LR
+    subgraph AWS["AWS Cloud - sa-east-1"]
+        subgraph VPC["VPC 10.0.0.0/16"]
+            Client["Cliente<br/>Mobile/Web"]
+            ALB["ALB<br/>HTTP:80"]
+            EKS["Amazon EKS<br/>K8s+Karpenter+HPA"]
+            Atlas["MongoDB Atlas<br/>M10 Cluster 3AZs"]
+
+            Client --> ALB
+            ALB --> EKS
+            EKS --> Atlas
+
+            subgraph Pods["Pods EKS"]
+                App["Pod App<br/>x2-10"]
+                API["Pod API<br/>x2-10"]
+            end
+
+            SQS["SQS + DLQ<br/>Filas"]
+            Secrets["Secrets Manager<br/>Credenciais"]
+            CW["CloudWatch<br/>Logs & Metrics"]
+            ECR["ECR<br/>Registry"]
+            S3["S3<br/>Logs"]
+            XRay["X-Ray<br/>Tracing"]
+
+            EKS -.- SQS
+            EKS -.- Secrets
+            EKS -.- CW
+            EKS -.- ECR
+            EKS -.- S3
+            EKS -.- XRay
+        end
+    end
+
+    subgraph Pipeline["CI/CD Pipeline"]
+        direction LR
+        GH["GitHub Push"] --> CB1["CodeBuild<br/>Test"]
+        CB1 --> DB["Docker Build"]
+        DB --> CD["CodeDeploy<br/>Blue/Green"]
+        CD --> VF["Verify"]
+        VF --> RB["Rollback<br/>Auto"]
+    end
+
+    style Client fill:#003366,color:#fff
+    style ALB fill:#0066CC,color:#fff
+    style EKS fill:#003366,color:#fff
+    style Atlas fill:#009650,color:#fff
+    style Pods fill:#003366,color:#fff,stroke:#fff
+    style App fill:#003366,color:#fff,stroke:#fff
+    style API fill:#003366,color:#fff,stroke:#fff
+    style SQS fill:#C8E1F5,color:#003366,stroke:#0066CC
+    style Secrets fill:#C8E1F5,color:#003366,stroke:#0066CC
+    style CW fill:#C8E1F5,color:#003366,stroke:#0066CC
+    style ECR fill:#C8E1F5,color:#003366,stroke:#0066CC
+    style S3 fill:#C8E1F5,color:#003366,stroke:#0066CC
+    style XRay fill:#C8E1F5,color:#003366,stroke:#0066CC
+    style AWS fill:#C8E1F5,color:#003366,stroke:#0066CC
+    style VPC fill:#fff,color:#003366,stroke:#0066CC
+    style GH fill:#003366,color:#fff
+    style CB1 fill:#0066CC,color:#fff
+    style DB fill:#2F78B4,color:#fff
+    style CD fill:#1E5A96,color:#fff
+    style VF fill:#144682,color:#fff
+    style RB fill:#C83232,color:#fff
+    style Pipeline fill:#F0F0F0,color:#003366,stroke:#0066CC

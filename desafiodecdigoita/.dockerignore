@@ -19,3 +19,4 @@ postman/
 docs/
 scripts/
 !scripts/docker-entrypoint.sh
+.venv/

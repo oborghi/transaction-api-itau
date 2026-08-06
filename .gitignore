@@ -1,0 +1,59 @@
+# Build
+target/
+build/
+*.class
+*.jar
+*.war
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# Maven
+.mvn/
+mvnw
+mvnw.cmd
+
+# Docker
+docker-compose.override.yml
+
+# Environment
+.env
+*.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test
+*.test
+test-output/
+
+# Coverage
+jacoco.exec
+**/jacoco.exec
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate*
+terraform/tfplan
+terraform/.terraform.lock.hcl
+terraform/*.tfvars
+!terraform/environments/*.tfvars
+
+# Docker volumes (persistent data - NOT to be committed)
+data/
+!data/.gitkeep
+
+# AWS
+.aws/
+credentials
